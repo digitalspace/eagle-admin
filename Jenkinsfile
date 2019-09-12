@@ -193,7 +193,7 @@ def zapScanner () {
       podTemplate(label: 'owasp-zap', name: 'owasp-zap', serviceAccount: 'jenkins', cloud: 'openshift', containers: [
         containerTemplate(
           name: 'jnlp',
-          image: 'registry.access.redhat.com/openshift3/jenkins-slave-zap',
+          image: '172.50.0.2:5000/openshift/jenkins-slave-zap',
           resourceRequestCpu: '500m',
           resourceLimitCpu: '1000m',
           resourceRequestMemory: '3Gi',
