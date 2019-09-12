@@ -300,6 +300,15 @@ pipeline {
       }
     }
 
+    stage('ZAP Security Scan') {
+      steps {
+        script {
+          echo "Running ZAP"
+          def results = zapScanner()
+        }
+      }
+    }
+
     stage('Deploy to dev'){
       steps {
         script {
@@ -346,15 +355,6 @@ pipeline {
     //     }
     //   }
     // }
-
-    stage('ZAP Security Scan') {
-      steps {
-        script {
-          echo "Running ZAP"
-          def results = zapScanner()
-        }
-      }
-    }
 
     // stage('BDD Tests') {
     //   agent { label: bddPodLabel }
