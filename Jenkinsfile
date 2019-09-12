@@ -210,9 +210,9 @@ def zapScanner () {
             checkout scm
             dir('zap') {
               sh("oc extract secret/eagle-admin-url --to=${env.WORKSPACE}/zap --confirm")
-              URL = sh(returnStdout: true, script: 'cat base-url')
+              SCAN_URL = sh(returnStdout: true, script: 'cat base-url')
 
-              def retVal = sh returnStatus: true, script: "/zap/zap-baseline.py -r index.html -t ${URL}"
+              def retVal = sh returnStatus: true, script: "/zap/zap-baseline.py -r index.html -t ${SCAN_URL}"
               publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: true, reportDir: '/zap/wrk', reportFiles: 'index.html', reportName: 'ZAP Full Scan', reportTitles: 'ZAP Full Scan'])
               echo "Return value is: ${retVal}"
             }
@@ -283,23 +283,23 @@ pipeline {
         //   }
         // }
 
-        stage('Linting') {
-          steps {
-            script {
-              echo "Running linter"
-              def results = nodejsLinter()
-            }
-          }
-        }
+        // stage('Linting') {
+        //   steps {
+        //     script {
+        //       echo "Running linter"
+        //       def results = nodejsLinter()
+        //     }
+        //   }
+        // }
 
-        stage('Sonarqube') {
-          steps {
-            script {
-              echo "Running Sonarqube"
-              def result = nodejsSonarqube()
-            }
-          }
-        }
+        // stage('Sonarqube') {
+        //   steps {
+        //     script {
+        //       echo "Running Sonarqube"
+        //       def result = nodejsSonarqube()
+        //     }
+        //   }
+        // }
       }
     }
 
