@@ -209,7 +209,10 @@ def zapScanner () {
             echo "checking out source"
             checkout scm
             dir('zap') {
-              def retVal = sh returnStatus: true, script: '/zap/zap-baseline.py -r index.html -t <your url>'
+              sh("oc extract secret/eagle-admin-url --to=${env.WORKSPACE}/zap --confirm")
+              URL = sh(returnStdout: true, script: 'cat base-url')
+
+              def retVal = sh returnStatus: true, script: "/zap/zap-baseline.py -r index.html -t ${URL}"
               publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: true, reportDir: '/zap/wrk', reportFiles: 'index.html', reportName: 'ZAP Full Scan', reportTitles: 'ZAP Full Scan'])
               echo "Return value is: ${retVal}"
             }
@@ -300,15 +303,6 @@ pipeline {
       }
     }
 
-    stage('ZAP Security Scan') {
-      steps {
-        script {
-          echo "Running ZAP"
-          def results = zapScanner()
-        }
-      }
-    }
-
     stage('Deploy to dev'){
       steps {
         script {
@@ -317,7 +311,7 @@ pipeline {
             openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev', srcStream: 'eagle-admin', srcTag: "${IMAGE_HASH}"
             sleep 5
 
-            openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'esm-dev', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
+            openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'mem-mmti-prod', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
             echo ">>>> Deployment Complete"
 
             notifyRocketChat(
@@ -337,6 +331,15 @@ pipeline {
             currentBuild.result = "FAILURE"
             throw new Exception("Deploy failed")
           }
+        }
+      }
+    }
+
+    stage('ZAP Security Scan') {
+      steps {
+        script {
+          echo "Running ZAP"
+          def results = zapScanner()
         }
       }
     }
