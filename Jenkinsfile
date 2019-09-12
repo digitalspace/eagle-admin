@@ -12,7 +12,7 @@ def notifyRocketChat(text, url) {
       "text": text
     ])
 
-    sh("curl -X POST -H 'Content-Type: application/json' --data \'${payload}\' ${rocketChatURL}")
+    // sh("curl -X POST -H 'Content-Type: application/json' --data \'${payload}\' ${rocketChatURL}")
 }
 
 /*
