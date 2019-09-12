@@ -1,9 +1,3 @@
-def sonarqubePodLabel = "eagle-admin-${UUID.randomUUID().toString()}"
-// podTemplate(label: sonarqubePodLabel, name: sonarqubePodLabel, serviceAccount: 'jenkins', cloud: 'openshift', containers: [])
-def zapPodLabel = "esm-admin-owasp-zap-${UUID.randomUUID().toString()}"
-// podTemplate(label: zapPodLabel, name: zapPodLabel, serviceAccount: 'jenkins', cloud: 'openshift', containers: [])
-
-@NonCPS
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
@@ -153,6 +147,8 @@ def nodejsSonarqube () {
               sh "npm install typescript"
               sh returnStdout: true, script: "./gradlew sonarqube -Dsonar.host.url=${SONARQUBE_URL} -Dsonar. -Dsonar.verbose=true --stacktrace --info"
 
+              sleep(30)
+
               // check if sonarqube passed
               sh("oc extract secret/sonarqube-status-urls --to=${env.WORKSPACE}/sonar-runner --confirm")
               SONARQUBE_STATUS_URL = sh(returnStdout: true, script: 'cat sonarqube-status-admin')
@@ -169,6 +165,7 @@ def nodejsSonarqube () {
                 )
 
                 currentBuild.result = 'FAILURE'
+                exit 1
               } else {
                 echo "Scan Passed"
               }
@@ -181,6 +178,40 @@ def nodejsSonarqube () {
               throw error
             } finally {
               echo "Scan Complete"
+            }
+          }
+        }
+      }
+      return true
+    }
+  }
+}
+
+def zapScanner () {
+  openshift.withCluster() {
+    openshift.withProject() {
+      podTemplate(label: 'owasp-zap', name: 'owasp-zap', serviceAccount: 'jenkins', cloud: 'openshift', containers: [
+        containerTemplate(
+          name: 'jnlp',
+          image: 'registry.access.redhat.com/openshift/jenkins-slave-zap',
+          resourceRequestCpu: '500m',
+          resourceLimitCpu: '1000m',
+          resourceRequestMemory: '3Gi',
+          resourceLimitMemory: '4Gi',
+          workingDir: '/home/jenkins',
+          command: '',
+          args: '${computer.jnlpmac} ${computer.name}'
+        )
+      ]) {
+        stage('ZAP Security Scan') {
+          node('owasp-zap') {
+            //the checkout is mandatory
+            echo "checking out source"
+            checkout scm
+            dir('zap') {
+              def retVal = sh returnStatus: true, script: '/zap/zap-baseline.py -r index.html -t <your url>'
+              publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: true, reportDir: '/zap/wrk', reportFiles: 'index.html', reportName: 'ZAP Full Scan', reportTitles: 'ZAP Full Scan'])
+              echo "Return value is: ${retVal}"
             }
           }
         }
@@ -240,7 +271,7 @@ pipeline {
           }
         }
 
-         // stage('Unit Tests') {
+        // stage('Unit Tests') {
         //   steps {
         //     script {
         //       echo "Running unit tests"
@@ -315,6 +346,15 @@ pipeline {
     //     }
     //   }
     // }
+
+    stage('ZAP Security Scan') {
+      steps {
+        script {
+          echo "Running ZAP"
+          def results = zapScanner()
+        }
+      }
+    }
 
     // stage('BDD Tests') {
     //   agent { label: bddPodLabel }
