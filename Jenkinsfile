@@ -220,7 +220,7 @@ def zapScanner () {
   }
 }
 
-def zapPostToSonar () {
+def postZapToSonar () {
   openshift.withCluster() {
     openshift.withProject() {
       // The jenkins-python3nodejs template has been purpose built for supporting SonarQube scanning.
@@ -435,6 +435,17 @@ pipeline {
         }
       }
     }
+
+
+    stage('Zap to Sonarqube') {
+      steps {
+        script {
+          echo "Posting Zap Scan to Sonarqube Report"
+          def result = postZapToSonar()
+        }
+      }
+    }
+
 
     // stage('BDD Tests') {
     //   agent { label: bddPodLabel }
