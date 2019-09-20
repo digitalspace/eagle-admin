@@ -257,22 +257,10 @@ def postZapToSonar () {
             // - method hudson.plugins.git.GitSCMBackwardCompatibility getExtensions
             // - staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods plus java.util.Collection java.lang.Object
             echo "Checking out the sonar-runner folder ..."
-            checkout([
-                $class: 'GitSCM',
-                branches: scm.branches,
-                extensions: scm.extensions + [
-                  [$class: 'SparseCheckoutPaths',  sparseCheckoutPaths:[[path:'sonar-runner/']]]
-                ],
-                userRemoteConfigs: scm.userRemoteConfigs
-            ])
+            checkout scm
 
             echo "Preparing the report for the publishing ..."
-            unstash name: "${ZAP_REPORT_STASH}"
-
-            SONARQUBE_URL = getUrlForRoute(SONAR_ROUTE_NAME).trim()
-            SONARQUBE_PWD = getSonarQubePwd().trim()
-            echo "URL: ${SONARQUBE_URL}"
-            echo "PWD: ${SONARQUBE_PWD}"
+            unstash name: "/zap/wrk"
 
             echo "Publishing the report ..."
             // The `sonar-runner` MUST exist in your project and contain a Gradle environment consisting of:
