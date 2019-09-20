@@ -220,6 +220,102 @@ def zapScanner () {
   }
 }
 
+def zapPostToSonar () {
+  openshift.withCluster() {
+    openshift.withProject() {
+      // The jenkins-python3nodejs template has been purpose built for supporting SonarQube scanning.
+      podTemplate(
+        label: 'jenkins-python3nodejs',
+        name: 'jenkins-python3nodejs',
+        serviceAccount: 'jenkins',
+        cloud: 'openshift',
+        containers: [
+          containerTemplate(
+            name: 'jnlp',
+            image: '172.50.0.2:5000/openshift/jenkins-slave-python3nodejs',
+            resourceRequestCpu: '1000m',
+            resourceLimitCpu: '2000m',
+            resourceRequestMemory: '2Gi',
+            resourceLimitMemory: '4Gi',
+            workingDir: '/tmp',
+            command: '',
+            args: '${computer.jnlpmac} ${computer.name}'
+          )
+        ]
+      ){
+        node('jenkins-python3nodejs') {
+
+          stage('Publish ZAP Report to SonarQube') {
+
+            // Do a sparse checkout of the sonar-runner folder since it is the only
+            // part of the project we need to publish the ZAP report to SonarQube.
+            // We're not scanning our source code here ...
+            //
+            // For this to work the Jenkins Administrator may have to approve the following methods;
+            // - method hudson.plugins.git.GitSCM getBranches
+            // - method hudson.plugins.git.GitSCM getUserRemoteConfigs
+            // - method hudson.plugins.git.GitSCMBackwardCompatibility getExtensions
+            // - staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods plus java.util.Collection java.lang.Object
+            echo "Checking out the sonar-runner folder ..."
+            checkout([
+                $class: 'GitSCM',
+                branches: scm.branches,
+                extensions: scm.extensions + [
+                  [$class: 'SparseCheckoutPaths',  sparseCheckoutPaths:[[path:'sonar-runner/']]]
+                ],
+                userRemoteConfigs: scm.userRemoteConfigs
+            ])
+
+            echo "Preparing the report for the publishing ..."
+            unstash name: "${ZAP_REPORT_STASH}"
+
+            SONARQUBE_URL = getUrlForRoute(SONAR_ROUTE_NAME).trim()
+            SONARQUBE_PWD = getSonarQubePwd().trim()
+            echo "URL: ${SONARQUBE_URL}"
+            echo "PWD: ${SONARQUBE_PWD}"
+
+            echo "Publishing the report ..."
+            // The `sonar-runner` MUST exist in your project and contain a Gradle environment consisting of:
+            // - Gradle wrapper script(s)
+            // - A simple `build.gradle` file that includes the SonarQube plug-in.
+            //
+            // An example can be found here:
+            // - https://github.com/BCDevOps/sonarqube
+            dir('sonar-runner') {
+              // ======================================================================================================
+              // Set your SonarQube scanner properties at this level, not at the Gradle Build level.
+              // The only thing that should be defined at the Gradle Build level is a minimal set of generic defaults.
+              //
+              // For more information on available properties visit:
+              // - https://docs.sonarqube.org/display/SCAN/Analyzing+with+SonarQube+Scanner+for+Gradle
+              // ======================================================================================================
+              sh("oc extract secret/sonarqube-secrets --to=${env.WORKSPACE}/sonar-runner --confirm")
+              SONARQUBE_URL = sh(returnStdout: true, script: 'cat sonarqube-route-url')
+
+
+              sh (
+                // 'sonar.zaproxy.reportPath' must be set to the absolute path of the xml formatted ZAP report.
+                // Exclude the report from being scanned as an xml file.  We only care about the results of the ZAP scan.
+
+                // -Dsonar.projectName=${SONAR_PROJECT_NAME} \
+                //   -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                //   -Dsonar.projectBaseDir=${SONAR_PROJECT_BASE_DIR} \
+                //   -Dsonar.sources=${SONAR_SOURCES} \
+                //   -Dsonar.zaproxy.reportPath=${WORKSPACE}${ZAP_REPORT_PATH} \
+                //   -Dsonar.exclusions=**/*.xml
+                returnStdout: true,
+                script: "./gradlew sonarqube --stacktrace --info \
+                  -Dsonar.verbose=true \
+                  -Dsonar.host.url=${SONARQUBE_URL}"
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 def CHANGELOG = "No new changes"
 def IMAGE_HASH = "latest"
 
