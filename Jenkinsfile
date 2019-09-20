@@ -207,13 +207,13 @@ def zapScanner () {
         )
       ]) {
           node('owasp-zap') {
-            stage('Scan Web Application') {
+            // stage('Scan Web Application') {
               dir('/zap') {
                 def retVal = sh returnStatus: true, script: '/zap/zap-baseline.py -r baseline.html -t https://eagle-test.pathfinder.gov.bc.ca/'
                 publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: true, reportDir: '/zap/wrk', reportFiles: 'baseline.html', reportName: 'ZAP Baseline Scan', reportTitles: 'ZAP Baseline Scan'])
                 echo "Return value is: ${retVal}"
               }
-            }
+            // }
           }
       }
     }
@@ -245,7 +245,7 @@ def postZapToSonar () {
       ){
         node('jenkins-python3nodejs') {
 
-          stage('Publish ZAP Report to SonarQube') {
+          // stage('Publish ZAP Report to SonarQube') {
 
             // Do a sparse checkout of the sonar-runner folder since it is the only
             // part of the project we need to publish the ZAP report to SonarQube.
@@ -297,7 +297,7 @@ def postZapToSonar () {
                   -Dsonar.host.url=${SONARQUBE_URL}"
               )
             }
-          }
+          // }
         }
       }
     }
