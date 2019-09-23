@@ -219,7 +219,7 @@ def zapScanner () {
         containers: [
           containerTemplate(
             name: 'jnlp',
-            image: 'docker-registry.default.svc:5000/openshift/jenkins-slave-zap',
+            image: 'docker-registry.default.svc:5000/mem-mmti-dev/jenkins-slave-zap',
             resourceRequestCpu: '500m',
             resourceLimitCpu: '1000m',
             resourceRequestMemory: '3Gi',
@@ -294,7 +294,7 @@ def postZapToSonar () {
         containers: [
           containerTemplate(
             name: 'jnlp',
-            image: 'docker-registry.default.svc:5000/openshift/jenkins-slave-python3nodejs',
+            image: '172.50.0.2:5000/openshift/jenkins-slave-python3nodejs',
             resourceRequestCpu: '1000m',
             resourceLimitCpu: '2000m',
             resourceRequestMemory: '2Gi',
