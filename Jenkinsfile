@@ -203,6 +203,7 @@ def nodejsSonarqube () {
     }
   }
 }
+
 def zapScanner () {
   openshift.withCluster() {
     openshift.withProject() {
@@ -267,6 +268,7 @@ def zapScanner () {
           }
         }
       }
+    }
   }
 }
 
