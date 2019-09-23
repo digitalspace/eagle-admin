@@ -14,6 +14,21 @@ def ZAP_REPORT_PATH = "/zap/wrk/${ZAP_REPORT_NAME}"
 // The name of the "stash" containing the ZAP report
 def ZAP_REPORT_STASH = "zap-report"
 
+@NonCPS
+String getUrlForRoute(String routeName, String projectNameSpace = '') {
+
+  def nameSpaceFlag = ''
+  if(projectNameSpace?.trim()) {
+    nameSpaceFlag = "-n ${projectNameSpace}"
+  }
+
+  def url = sh (
+    script: "oc get routes ${nameSpaceFlag} -o wide --no-headers | awk \'/${routeName}/{ print match(\$0,/edge/) ?  \"https://\"\$2 : \"http://\"\$2 }\'",
+    returnStdout: true
+  ).trim()
+
+  return url
+}
 
 /*
  * Sends a rocket chat notification
