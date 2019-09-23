@@ -179,10 +179,10 @@ def nodejsSonarqube () {
               if ( "${SONARQUBE_STATUS}" == "ERROR") {
                 echo "Scan Failed"
 
-                notifyRocketChat(
-                  "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Sonarqube scan failed",
-                  ROCKET_DEPLOY_WEBHOOK
-                )
+                // notifyRocketChat(
+                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Sonarqube scan failed",
+                //   ROCKET_DEPLOY_WEBHOOK
+                // )
 
                 currentBuild.result = 'FAILURE'
                 exit 1
@@ -191,10 +191,10 @@ def nodejsSonarqube () {
               }
 
             } catch (error) {
-              notifyRocketChat(
-                "@all The latest build of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n ${error.message}",
-                ROCKET_DEPLOY_WEBHOOK
-              )
+              // notifyRocketChat(
+              //   "@all The latest build of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n ${error.message}",
+              //   ROCKET_DEPLOY_WEBHOOK
+              // )
               throw error
             } finally {
               echo "Scan Complete"
