@@ -333,8 +333,8 @@ def postZapToSonar () {
             echo "Preparing the report for the publishing ..."
             unstash name: "${ZAP_REPORT_STASH}"
 
-            sh("oc extract secret/sonarqube-secrets --to=${env.WORKSPACE}/sonar-runner --confirm")
-            SONARQUBE_URL = sh(returnStdout: true, script: 'cat sonarqube-route-url')
+            SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
+            echo "${SONARQUBE_URL}"
 
             echo "Publishing the report ..."
             // The `sonar-runner` MUST exist in your project and contain a Gradle environment consisting of:
