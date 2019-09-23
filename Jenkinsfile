@@ -219,7 +219,7 @@ def zapScanner () {
         containers: [
           containerTemplate(
             name: 'jnlp',
-            image: 'docker-registry.default.svc:5000/mem-mmti-dev/jenkins-slave-zap',
+            image: '172.50.0.2:5000/openshift/jenkins-slave-zap',
             resourceRequestCpu: '500m',
             resourceLimitCpu: '1000m',
             resourceRequestMemory: '3Gi',
