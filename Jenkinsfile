@@ -333,7 +333,7 @@ def postZapToSonar () {
             echo "Preparing the report for the publishing ..."
             unstash name: "${ZAP_REPORT_STASH}"
 
-            SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
+            SONARQUBE_URL = getUrlForRoute(SONAR_ROUTE_NAME).trim()
             echo "${SONARQUBE_URL}"
 
             echo "Publishing the report ..."
@@ -382,9 +382,9 @@ pipeline {
     disableResume()
   }
   stages {
-    // stage('Parallel Build Steps') {
-    //   failFast true
-    //   parallel {
+    stage('Parallel Build Steps') {
+      failFast true
+      parallel {
         // stage('Build') {
         //   agent any
         //   steps {
@@ -423,7 +423,7 @@ pipeline {
         //   }
         // }
 
-         // stage('Unit Tests') {
+        //  stage('Unit Tests') {
         //   steps {
         //     script {
         //       echo "Running unit tests"
@@ -441,16 +441,16 @@ pipeline {
         //   }
         // }
 
-        // stage('Sonarqube') {
-        //   steps {
-        //     script {
-        //       echo "Running Sonarqube"
-        //       def result = nodejsSonarqube()
-        //     }
-        //   }
-        // }
-    //   }
-    // }
+        stage('Sonarqube') {
+          steps {
+            script {
+              echo "Running Sonarqube"
+              def result = nodejsSonarqube()
+            }
+          }
+        }
+      }
+    }
 
     // stage('Deploy to dev'){
     //   steps {
