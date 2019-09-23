@@ -248,7 +248,7 @@ def zapScanner () {
 
 
             // Dynamicaly determine the target URL for the ZAP scan ...
-            def TARGET_URL = getUrlForRoute('eagle-public', 'eagle-test').trim()
+            def TARGET_URL = getUrlForRoute('eagle-public', 'mem-mmti-prod').trim()
             def API_TARGET_URL="${TARGET_URL}/api/?format=${API_FORMAT}"
 
             echo "Target URL: ${TARGET_URL}"
