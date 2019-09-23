@@ -160,8 +160,8 @@ def nodejsSonarqube () {
           dir('sonar-runner') {
             try {
               // run scan
-              sh("oc extract secret/sonarqube-secrets --to=${env.WORKSPACE}/sonar-runner --confirm")
-              SONARQUBE_URL = sh(returnStdout: true, script: 'cat sonarqube-route-url')
+              SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
+              echo "${SONARQUBE_URL}"
 
               sh "npm install typescript"
               sh returnStdout: true, script: "./gradlew sonarqube -Dsonar.host.url=${SONARQUBE_URL} -Dsonar. -Dsonar.verbose=true --stacktrace --info"
@@ -171,7 +171,7 @@ def nodejsSonarqube () {
 
               // check if sonarqube passed
               sh("oc extract secret/sonarqube-status-urls --to=${env.WORKSPACE}/sonar-runner --confirm")
-              SONARQUBE_STATUS_URL = sh(returnStdout: true, script: 'cat sonarqube-status-admin')
+              SONARQUBE_STATUS_URL = "${SONARQUBE_URL}/api/qualitygates/project_status?projectKey=org.sonarqube:eagle-admin"
 
               SONARQUBE_STATUS_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
               SONARQUBE_STATUS = sonarGetStatus (SONARQUBE_STATUS_JSON)
@@ -333,7 +333,7 @@ def postZapToSonar () {
             echo "Preparing the report for the publishing ..."
             unstash name: "${ZAP_REPORT_STASH}"
 
-            SONARQUBE_URL = getUrlForRoute(SONAR_ROUTE_NAME).trim()
+            SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
             echo "${SONARQUBE_URL}"
 
             echo "Publishing the report ..."
