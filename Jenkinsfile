@@ -328,14 +328,7 @@ def postZapToSonar () {
             // - method hudson.plugins.git.GitSCMBackwardCompatibility getExtensions
             // - staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods plus java.util.Collection java.lang.Object
             echo "Checking out the sonar-runner folder ..."
-            checkout([
-                $class: 'GitSCM',
-                branches: scm.branches,
-                extensions: scm.extensions + [
-                  [$class: 'SparseCheckoutPaths',  sparseCheckoutPaths:[[path:'sonar-runner/']]]
-                ],
-                userRemoteConfigs: scm.userRemoteConfigs
-            ])
+            checkout scm
 
             echo "Preparing the report for the publishing ..."
             unstash name: "${ZAP_REPORT_STASH}"
