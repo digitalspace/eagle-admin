@@ -2,18 +2,6 @@ import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.util.regex.Pattern
 
-// The API format; either openapi or soap
-def API_FORMAT = 'openapi'
-
-// The name  of the ZAP report
-def ZAP_REPORT_NAME = "zap-report.xml"
-
-// The location of the ZAP reports
-def ZAP_REPORT_PATH = "/zap/wrk/${ZAP_REPORT_NAME}"
-
-// The name of the "stash" containing the ZAP report
-def ZAP_REPORT_STASH = "zap-report"
-
 @NonCPS
 String getUrlForRoute(String routeName, String projectNameSpace = '') {
 
@@ -245,11 +233,18 @@ def zapScanner () {
         node('owasp-zap') {
           stage('ZAP Security Scan') {
 
+            // The name  of the ZAP report
+            def ZAP_REPORT_NAME = "zap-report.xml"
 
+            // The location of the ZAP reports
+            def ZAP_REPORT_PATH = "/zap/wrk/${ZAP_REPORT_NAME}"
+
+            // The name of the "stash" containing the ZAP report
+            def ZAP_REPORT_STASH = "zap-report"
 
             // Dynamicaly determine the target URL for the ZAP scan ...
             def TARGET_URL = getUrlForRoute('eagle-public', 'mem-mmti-prod').trim()
-            def API_TARGET_URL="${TARGET_URL}/api/"
+            def API_TARGET_URL="${TARGET_URL}/api/?format=${API_FORMAT}"
 
             echo "Target URL: ${TARGET_URL}"
             echo "API Target URL: ${API_TARGET_URL}"
@@ -313,6 +308,15 @@ def postZapToSonar () {
         node('jenkins-python3nodejs') {
 
           stage('Publish ZAP Report to SonarQube') {
+
+             // The name  of the ZAP report
+            def ZAP_REPORT_NAME = "zap-report.xml"
+
+            // The location of the ZAP reports
+            def ZAP_REPORT_PATH = "/zap/wrk/${ZAP_REPORT_NAME}"
+
+            // The name of the "stash" containing the ZAP report
+            def ZAP_REPORT_STASH = "zap-report"
 
             // Do a sparse checkout of the sonar-runner folder since it is the only
             // part of the project we need to publish the ZAP report to SonarQube.
