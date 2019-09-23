@@ -2,6 +2,19 @@ import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.util.regex.Pattern
 
+// The API format; either openapi or soap
+def API_FORMAT = 'openapi'
+
+// The name  of the ZAP report
+def ZAP_REPORT_NAME = "zap-report.xml"
+
+// The location of the ZAP reports
+def ZAP_REPORT_PATH = "/zap/wrk/${ZAP_REPORT_NAME}"
+
+// The name of the "stash" containing the ZAP report
+def ZAP_REPORT_STASH = "zap-report"
+
+
 /*
  * Sends a rocket chat notification
  */
@@ -193,30 +206,67 @@ def nodejsSonarqube () {
 def zapScanner () {
   openshift.withCluster() {
     openshift.withProject() {
-      podTemplate(label: 'owasp-zap', name: 'owasp-zap', serviceAccount: 'jenkins', cloud: 'openshift', containers: [
-        containerTemplate(
-          name: 'jnlp',
-          image: '172.50.0.2:5000/openshift/jenkins-slave-zap',
-          resourceRequestCpu: '500m',
-          resourceLimitCpu: '1000m',
-          resourceRequestMemory: '3Gi',
-          resourceLimitMemory: '4Gi',
-          workingDir: '/tmp',
-          command: '',
-          args: '${computer.jnlpmac} ${computer.name}'
-        )
-      ]) {
-          node('owasp-zap') {
-            // stage('Scan Web Application') {
-              dir('/zap') {
-                def retVal = sh returnStatus: true, script: '/zap/zap-baseline.py -r baseline.html -t https://eagle-test.pathfinder.gov.bc.ca/'
-                publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: true, reportDir: '/zap/wrk', reportFiles: 'baseline.html', reportName: 'ZAP Baseline Scan', reportTitles: 'ZAP Baseline Scan'])
-                echo "Return value is: ${retVal}"
-              }
-            // }
+      // The jenkins-slave-zap image has been purpose built for supporting ZAP scanning.
+      podTemplate(
+        label: 'owasp-zap',
+        name: 'owasp-zap',
+        serviceAccount: 'jenkins',
+        cloud: 'openshift',
+        containers: [
+          containerTemplate(
+            name: 'jnlp',
+            image: '172.50.0.2:5000/openshift/jenkins-slave-zap',
+            resourceRequestCpu: '500m',
+            resourceLimitCpu: '1000m',
+            resourceRequestMemory: '3Gi',
+            resourceLimitMemory: '4Gi',
+            workingDir: '/home/jenkins',
+            command: '',
+            args: '${computer.jnlpmac} ${computer.name}'
+          )
+        ]
+      ){
+        node('owasp-zap') {
+          stage('ZAP Security Scan') {
+
+
+
+            // Dynamicaly determine the target URL for the ZAP scan ...
+            def TARGET_URL = getUrlForRoute('eagle-public', 'eagle-test').trim()
+            def API_TARGET_URL="${TARGET_URL}/api/?format=${API_FORMAT}"
+
+            echo "Target URL: ${TARGET_URL}"
+            echo "API Target URL: ${API_TARGET_URL}"
+
+            dir('zap') {
+
+              // The ZAP scripts are installed on the root of the jenkins-slave-zap image.
+              // When running ZAP from there the reports will be created in /zap/wrk/ by default.
+              // ZAP has problems with creating the reports directly in the Jenkins
+              // working directory, so they have to be copied over after the fact.
+              def retVal = sh (
+                returnStatus: true,
+                script: "/zap/zap-baseline.py -x ${ZAP_REPORT_NAME} -t ${TARGET_URL}"
+                // Other scanner options ...
+                // zap-api-scan errors out
+                // script: "/zap/zap-api-scan.py -x ${ZAP_REPORT_NAME} -t ${API_TARGET_URL} -f ${API_FORMAT}"
+                // script: "/zap/zap-full-scan.py -x ${ZAP_REPORT_NAME} -t ${TARGET_URL}"
+              )
+              echo "Return value is: ${retVal}"
+
+              // Copy the ZAP report into the Jenkins working directory so the Jenkins tools can access it.
+              sh (
+                returnStdout: true,
+                script: "mkdir -p ./wrk/ && cp /zap/wrk/${ZAP_REPORT_NAME} ./wrk/"
+              )
+            }
+
+            // Stash the ZAP report for publishing in a different stage (which will run on a different pod).
+            echo "Stash the report for the publishing stage ..."
+            stash name: "${ZAP_REPORT_STASH}", includes: "zap/wrk/*.xml"
           }
+        }
       }
-    }
   }
 }
 
@@ -245,7 +295,7 @@ def postZapToSonar () {
       ){
         node('jenkins-python3nodejs') {
 
-          // stage('Publish ZAP Report to SonarQube') {
+          stage('Publish ZAP Report to SonarQube') {
 
             // Do a sparse checkout of the sonar-runner folder since it is the only
             // part of the project we need to publish the ZAP report to SonarQube.
@@ -257,10 +307,20 @@ def postZapToSonar () {
             // - method hudson.plugins.git.GitSCMBackwardCompatibility getExtensions
             // - staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods plus java.util.Collection java.lang.Object
             echo "Checking out the sonar-runner folder ..."
-            checkout scm
+            checkout([
+                $class: 'GitSCM',
+                branches: scm.branches,
+                extensions: scm.extensions + [
+                  [$class: 'SparseCheckoutPaths',  sparseCheckoutPaths:[[path:'sonar-runner/']]]
+                ],
+                userRemoteConfigs: scm.userRemoteConfigs
+            ])
 
             echo "Preparing the report for the publishing ..."
-            unstash name: "/zap/wrk"
+            unstash name: "${ZAP_REPORT_STASH}"
+
+            sh("oc extract secret/sonarqube-secrets --to=${env.WORKSPACE}/sonar-runner --confirm")
+            SONARQUBE_URL = sh(returnStdout: true, script: 'cat sonarqube-route-url')
 
             echo "Publishing the report ..."
             // The `sonar-runner` MUST exist in your project and contain a Gradle environment consisting of:
@@ -277,27 +337,22 @@ def postZapToSonar () {
               // For more information on available properties visit:
               // - https://docs.sonarqube.org/display/SCAN/Analyzing+with+SonarQube+Scanner+for+Gradle
               // ======================================================================================================
-              sh("oc extract secret/sonarqube-secrets --to=${env.WORKSPACE}/sonar-runner --confirm")
-              SONARQUBE_URL = sh(returnStdout: true, script: 'cat sonarqube-route-url')
-
-
               sh (
                 // 'sonar.zaproxy.reportPath' must be set to the absolute path of the xml formatted ZAP report.
                 // Exclude the report from being scanned as an xml file.  We only care about the results of the ZAP scan.
-
-                // -Dsonar.projectName=${SONAR_PROJECT_NAME} \
-                //   -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                //   -Dsonar.projectBaseDir=${SONAR_PROJECT_BASE_DIR} \
-                //   -Dsonar.sources=${SONAR_SOURCES} \
-                //   -Dsonar.zaproxy.reportPath=${WORKSPACE}${ZAP_REPORT_PATH} \
-                //   -Dsonar.exclusions=**/*.xml
                 returnStdout: true,
                 script: "./gradlew sonarqube --stacktrace --info \
                   -Dsonar.verbose=true \
-                  -Dsonar.host.url=${SONARQUBE_URL}"
+                  -Dsonar.host.url=${SONARQUBE_URL} \
+                  -Dsonar.projectName='eagle-admin'\
+                  -Dsonar.projectKey='org.sonarqube:eagle-admin' \
+                  -Dsonar.projectBaseDir='../' \
+                  -Dsonar.sources='./src/app' \
+                  -Dsonar.zaproxy.reportPath=${WORKSPACE}${ZAP_REPORT_PATH} \
+                  -Dsonar.exclusions=**/*.xml"
               )
             }
-          // }
+          }
         }
       }
     }
