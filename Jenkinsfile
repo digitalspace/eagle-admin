@@ -163,6 +163,9 @@ def nodejsSonarqube () {
               SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
               echo "${SONARQUBE_URL}"
 
+              sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
+              ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
+
               sh "npm install typescript"
               sh returnStdout: true, script: "./gradlew sonarqube -Dsonar.host.url=${SONARQUBE_URL} -Dsonar. -Dsonar.verbose=true --stacktrace --info"
 
@@ -179,10 +182,10 @@ def nodejsSonarqube () {
               if ( "${SONARQUBE_STATUS}" == "ERROR") {
                 echo "Scan Failed"
 
-                // notifyRocketChat(
-                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Sonarqube scan failed: : ${SONARQUBE_URL}",
-                //   ROCKET_DEPLOY_WEBHOOK
-                // )
+                notifyRocketChat(
+                  "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Sonarqube scan failed: : ${SONARQUBE_URL}",
+                  ROCKET_DEPLOY_WEBHOOK
+                )
 
                 currentBuild.result = 'FAILURE'
                 exit 1
@@ -191,10 +194,10 @@ def nodejsSonarqube () {
               }
 
             } catch (error) {
-              // notifyRocketChat(
-              //   "@all The latest build of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n ${error.message}",
-              //   ROCKET_DEPLOY_WEBHOOK
-              // )
+              notifyRocketChat(
+                "@all The latest build of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n ${error.message}",
+                ROCKET_DEPLOY_WEBHOOK
+              )
               throw error
             } finally {
               echo "Sonarqube Scan Complete"
@@ -219,7 +222,7 @@ def zapScanner () {
         containers: [
           containerTemplate(
             name: 'jnlp',
-            image: 'docker-registry.default.svc:5000/openshift/jenkins-slave-zap',
+            image: '172.50.0.2:5000/openshift/jenkins-slave-zap',
             resourceRequestCpu: '500m',
             resourceLimitCpu: '1000m',
             resourceRequestMemory: '3Gi',
@@ -288,7 +291,7 @@ def postZapToSonar () {
         containers: [
           containerTemplate(
             name: 'jnlp',
-            image: 'docker-registry.default.svc:5000/openshift/jenkins-slave-python3nodejs',
+            image: '172.50.0.2:5000/openshift/jenkins-slave-python3nodejs',
             resourceRequestCpu: '1000m',
             resourceLimitCpu: '2000m',
             resourceRequestMemory: '2Gi',
@@ -308,6 +311,9 @@ def postZapToSonar () {
 
           // The name of the "stash" containing the ZAP report
           def ZAP_REPORT_STASH = "zap-report"
+
+          sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
+          ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
 
           echo "Checking out the sonar-runner folder ..."
           checkout scm
@@ -347,18 +353,16 @@ def postZapToSonar () {
               if ( "${ZAP_STATUS}" == "ERROR") {
                 echo "ZAP Scan Failed"
 
-                // notifyRocketChat(
-                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Zap scan failed: ${SONARQUBE_URL}",
-                //   ROCKET_DEPLOY_WEBHOOK
-                // )
+                notifyRocketChat(
+                  "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Zap scan failed: ${SONARQUBE_URL}",
+                  ROCKET_DEPLOY_WEBHOOK
+                )
 
                 currentBuild.result = 'FAILURE'
                 exit 1
               } else {
                 echo "ZAP Scan Passed"
               }
-
-
           }
         }
       }
@@ -375,46 +379,46 @@ pipeline {
     disableResume()
   }
   stages {
-    // stage('Parallel Build Steps') {
-    //   failFast true
-    //   parallel {
-        // stage('Build') {
-        //   agent any
-        //   steps {
-        //     script {
-        //       pastBuilds = []
-        //       buildsSinceLastSuccess(pastBuilds, currentBuild);
-        //       CHANGELOG = getChangeLog(pastBuilds);
+    stage('Parallel Build Steps') {
+      failFast true
+      parallel {
+        stage('Build') {
+          agent any
+          steps {
+            script {
+              pastBuilds = []
+              buildsSinceLastSuccess(pastBuilds, currentBuild);
+              CHANGELOG = getChangeLog(pastBuilds);
 
-        //       echo ">>>>>>Changelog: \n ${CHANGELOG}"
+              echo ">>>>>>Changelog: \n ${CHANGELOG}"
 
-        //       try {
-        //         sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
-        //         ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
-        //         ROCKET_QA_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-qa-webhook')
+              try {
+                sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
+                ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
+                ROCKET_QA_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-qa-webhook')
 
-        //         echo "Building eagle-admin develop branch"
-        //         openshiftBuild bldCfg: 'eagle-admin-angular', showBuildLogs: 'true'
-        //         openshiftBuild bldCfg: 'eagle-admin-build', showBuildLogs: 'true'
-        //         echo "Build done"
+                echo "Building eagle-admin develop branch"
+                openshiftBuild bldCfg: 'eagle-admin-angular', showBuildLogs: 'true'
+                openshiftBuild bldCfg: 'eagle-admin-build', showBuildLogs: 'true'
+                echo "Build done"
 
-        //         echo ">>> Get Image Hash"
-        //         // Don't tag with BUILD_ID so the pruner can do it's job; it won't delete tagged images.
-        //         // Tag the images for deployment based on the image's hash
-        //         IMAGE_HASH = sh (
-        //           script: """oc get istag eagle-admin:latest -o template --template=\"{{.image.dockerImageReference}}\"|awk -F \":\" \'{print \$3}\'""",
-        //           returnStdout: true).trim()
-        //         echo ">> IMAGE_HASH: ${IMAGE_HASH}"
-        //       } catch (error) {
-        //         notifyRocketChat(
-        //           "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: \n ${error.message}",
-        //           ROCKET_QA_WEBHOOK
-        //         )
-        //         throw error
-        //       }
-        //     }
-        //   }
-        // }
+                echo ">>> Get Image Hash"
+                // Don't tag with BUILD_ID so the pruner can do it's job; it won't delete tagged images.
+                // Tag the images for deployment based on the image's hash
+                IMAGE_HASH = sh (
+                  script: """oc get istag eagle-admin:latest -o template --template=\"{{.image.dockerImageReference}}\"|awk -F \":\" \'{print \$3}\'""",
+                  returnStdout: true).trim()
+                echo ">> IMAGE_HASH: ${IMAGE_HASH}"
+              } catch (error) {
+                notifyRocketChat(
+                  "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: \n ${error.message}",
+                  ROCKET_QA_WEBHOOK
+                )
+                throw error
+              }
+            }
+          }
+        }
 
         //  stage('Unit Tests') {
         //   steps {
@@ -425,57 +429,57 @@ pipeline {
         //   }
         // }
 
-        // stage('Linting') {
-        //   steps {
-        //     script {
-        //       echo "Running linter"
-        //       def results = nodejsLinter()
-        //     }
-        //   }
-        // }
+        stage('Linting') {
+          steps {
+            script {
+              echo "Running linter"
+              def results = nodejsLinter()
+            }
+          }
+        }
 
-        // stage('Sonarqube') {
-        //   steps {
-        //     script {
-        //       echo "Running Sonarqube"
-        //       def result = nodejsSonarqube()
-        //     }
-        //   }
-        // }
-    //   }
-    // }
+        stage('Sonarqube') {
+          steps {
+            script {
+              echo "Running Sonarqube"
+              def result = nodejsSonarqube()
+            }
+          }
+        }
+      }
+    }
 
-    // stage('Deploy to dev'){
-    //   steps {
-    //     script {
-    //       try {
-    //         echo "Deploying to dev..."
-    //         openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev', srcStream: 'eagle-admin', srcTag: "${IMAGE_HASH}"
-    //         sleep 5
+    stage('Deploy to dev'){
+      steps {
+        script {
+          try {
+            echo "Deploying to dev..."
+            openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev', srcStream: 'eagle-admin', srcTag: "${IMAGE_HASH}"
+            sleep 5
 
-    //         openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'esm-dev', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
-    //         echo ">>>> Deployment Complete"
+            openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'esm-dev', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
+            echo ">>>> Deployment Complete"
 
-    //         notifyRocketChat(
-    //           "A new version of eagle-admin is now in Dev, build ${env.BUILD_DISPLAY_NAME} \n Changes: \n ${CHANGELOG}",
-    //           ROCKET_DEPLOY_WEBHOOK
-    //         )
+            notifyRocketChat(
+              "A new version of eagle-admin is now in Dev, build ${env.BUILD_DISPLAY_NAME} \n Changes: \n ${CHANGELOG}",
+              ROCKET_DEPLOY_WEBHOOK
+            )
 
-    //         notifyRocketChat(
-    //           "@all A new version of eagle-admin is now in Dev and ready for QA. \n Changes to Dev: \n ${CHANGELOG}",
-    //           ROCKET_QA_WEBHOOK
-    //         )
-    //       } catch (error) {
-    //         notifyRocketChat(
-    //           "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: ${error.message}",
-    //           ROCKET_DEPLOY_WEBHOOK
-    //         )
-    //         currentBuild.result = "FAILURE"
-    //         throw new Exception("Deploy failed")
-    //       }
-    //     }
-    //   }
-    // }
+            notifyRocketChat(
+              "@all A new version of eagle-admin is now in Dev and ready for QA. \n Changes to Dev: \n ${CHANGELOG}",
+              ROCKET_QA_WEBHOOK
+            )
+          } catch (error) {
+            notifyRocketChat(
+              "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: ${error.message}",
+              ROCKET_DEPLOY_WEBHOOK
+            )
+            currentBuild.result = "FAILURE"
+            throw new Exception("Deploy failed")
+          }
+        }
+      }
+    }
 
     stage('Zap') {
       steps {
