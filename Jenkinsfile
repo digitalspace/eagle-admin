@@ -187,7 +187,7 @@ def nodejsSonarqube () {
                 currentBuild.result = 'FAILURE'
                 exit 1
               } else {
-                echo "Scan Passed"
+                echo "Sonarqube Scan Passed"
               }
 
             } catch (error) {
@@ -197,7 +197,7 @@ def nodejsSonarqube () {
               // )
               throw error
             } finally {
-              echo "Scan Complete"
+              echo "Sonarqube Scan Complete"
             }
           }
         }
@@ -353,13 +353,38 @@ def postZapToSonar () {
               script: "./gradlew sonarqube --stacktrace --info \
                 -Dsonar.verbose=true \
                 -Dsonar.host.url=${SONARQUBE_URL} \
-                -Dsonar.projectName='eagle-admin'\
-                -Dsonar.projectKey='org.sonarqube:eagle-admin' \
+                -Dsonar.projectName='eagle-admin-zap-scan'\
+                -Dsonar.projectKey='org.sonarqube:eagle-admin-zap-scan' \
                 -Dsonar.projectBaseDir='../' \
                 -Dsonar.sources='./src/app' \
                 -Dsonar.zaproxy.reportPath=${WORKSPACE}${ZAP_REPORT_PATH} \
                 -Dsonar.exclusions=**/*.xml"
             )
+
+            // wiat for scan status to update
+              sleep(30)
+
+              // check if zap passed
+              SONARQUBE_STATUS_URL = "${SONARQUBE_URL}/api/qualitygates/project_status?projectKey=org.sonarqube:eagle-admin-zap-scan"
+
+              ZAP_STATUS_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
+              ZAP_STATUS = sonarGetStatus (ZAP_STATUS_JSON)
+
+              if ( "${ZAP_STATUS}" == "ERROR") {
+                echo "ZAP Scan Failed"
+
+                // notifyRocketChat(
+                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Sonarqube scan failed",
+                //   ROCKET_DEPLOY_WEBHOOK
+                // )
+
+                currentBuild.result = 'FAILURE'
+                exit 1
+              } else {
+                echo "ZAP Scan Passed"
+              }
+
+
           }
         }
       }
