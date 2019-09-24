@@ -180,7 +180,7 @@ def nodejsSonarqube () {
                 echo "Scan Failed"
 
                 // notifyRocketChat(
-                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Sonarqube scan failed",
+                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Sonarqube scan failed: : ${SONARQUBE_URL}",
                 //   ROCKET_DEPLOY_WEBHOOK
                 // )
 
@@ -219,7 +219,7 @@ def zapScanner () {
         containers: [
           containerTemplate(
             name: 'jnlp',
-            image: '172.50.0.2:5000/openshift/jenkins-slave-zap',
+            image: 'docker-registry.default.svc:5000/openshift/jenkins-slave-zap',
             resourceRequestCpu: '500m',
             resourceLimitCpu: '1000m',
             resourceRequestMemory: '3Gi',
@@ -256,10 +256,6 @@ def zapScanner () {
             def retVal = sh (
               returnStatus: true,
               script: "/zap/zap-baseline.py -x ${ZAP_REPORT_NAME} -t ${TARGET_URL}"
-              // Other scanner options ...
-              // zap-api-scan errors out
-              // script: "/zap/zap-api-scan.py -x ${ZAP_REPORT_NAME} -t ${API_TARGET_URL} -f ${API_FORMAT}"
-              // script: "/zap/zap-full-scan.py -x ${ZAP_REPORT_NAME} -t ${TARGET_URL}"
             )
             echo "Return value is: ${retVal}"
 
@@ -292,7 +288,7 @@ def postZapToSonar () {
         containers: [
           containerTemplate(
             name: 'jnlp',
-            image: '172.50.0.2:5000/openshift/jenkins-slave-python3nodejs',
+            image: 'docker-registry.default.svc:5000/openshift/jenkins-slave-python3nodejs',
             resourceRequestCpu: '1000m',
             resourceLimitCpu: '2000m',
             resourceRequestMemory: '2Gi',
@@ -313,15 +309,6 @@ def postZapToSonar () {
           // The name of the "stash" containing the ZAP report
           def ZAP_REPORT_STASH = "zap-report"
 
-          // Do a sparse checkout of the sonar-runner folder since it is the only
-          // part of the project we need to publish the ZAP report to SonarQube.
-          // We're not scanning our source code here ...
-          //
-          // For this to work the Jenkins Administrator may have to approve the following methods;
-          // - method hudson.plugins.git.GitSCM getBranches
-          // - method hudson.plugins.git.GitSCM getUserRemoteConfigs
-          // - method hudson.plugins.git.GitSCMBackwardCompatibility getExtensions
-          // - staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods plus java.util.Collection java.lang.Object
           echo "Checking out the sonar-runner folder ..."
           checkout scm
 
@@ -332,20 +319,7 @@ def postZapToSonar () {
           echo "${SONARQUBE_URL}"
 
           echo "Publishing the report ..."
-          // The `sonar-runner` MUST exist in your project and contain a Gradle environment consisting of:
-          // - Gradle wrapper script(s)
-          // - A simple `build.gradle` file that includes the SonarQube plug-in.
-          //
-          // An example can be found here:
-          // - https://github.com/BCDevOps/sonarqube
           dir('sonar-runner') {
-            // ======================================================================================================
-            // Set your SonarQube scanner properties at this level, not at the Gradle Build level.
-            // The only thing that should be defined at the Gradle Build level is a minimal set of generic defaults.
-            //
-            // For more information on available properties visit:
-            // - https://docs.sonarqube.org/display/SCAN/Analyzing+with+SonarQube+Scanner+for+Gradle
-            // ======================================================================================================
             sh (
               // 'sonar.zaproxy.reportPath' must be set to the absolute path of the xml formatted ZAP report.
               // Exclude the report from being scanned as an xml file.  We only care about the results of the ZAP scan.
@@ -374,7 +348,7 @@ def postZapToSonar () {
                 echo "ZAP Scan Failed"
 
                 // notifyRocketChat(
-                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Sonarqube scan failed",
+                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Zap scan failed: ${SONARQUBE_URL}",
                 //   ROCKET_DEPLOY_WEBHOOK
                 // )
 
