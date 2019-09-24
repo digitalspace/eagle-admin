@@ -231,51 +231,49 @@ def zapScanner () {
         ]
       ){
         node('owasp-zap') {
-          stage('ZAP Security Scan') {
+          // The name  of the ZAP report
+          def ZAP_REPORT_NAME = "zap-report.xml"
 
-            // The name  of the ZAP report
-            def ZAP_REPORT_NAME = "zap-report.xml"
+          // The location of the ZAP reports
+          def ZAP_REPORT_PATH = "/zap/wrk/${ZAP_REPORT_NAME}"
 
-            // The location of the ZAP reports
-            def ZAP_REPORT_PATH = "/zap/wrk/${ZAP_REPORT_NAME}"
+          // The name of the "stash" containing the ZAP report
+          def ZAP_REPORT_STASH = "zap-report"
 
-            // The name of the "stash" containing the ZAP report
-            def ZAP_REPORT_STASH = "zap-report"
+          // Dynamicaly determine the target URL for the ZAP scan ...
+          def TARGET_URL = getUrlForRoute('eagle-admin', 'mem-mmti-prod').trim()
+          def API_TARGET_URL="${TARGET_URL}/api/"
 
-            // Dynamicaly determine the target URL for the ZAP scan ...
-            def TARGET_URL = getUrlForRoute('eagle-public', 'mem-mmti-prod').trim()
-            def API_TARGET_URL="${TARGET_URL}/api/"
+          echo "Target URL: ${TARGET_URL}"
+          echo "API Target URL: ${API_TARGET_URL}"
 
-            echo "Target URL: ${TARGET_URL}"
-            echo "API Target URL: ${API_TARGET_URL}"
+          dir('zap') {
 
-            dir('zap') {
+            // The ZAP scripts are installed on the root of the jenkins-slave-zap image.
+            // When running ZAP from there the reports will be created in /zap/wrk/ by default.
+            // ZAP has problems with creating the reports directly in the Jenkins
+            // working directory, so they have to be copied over after the fact.
+            def retVal = sh (
+              returnStatus: true,
+              script: "/zap/zap-baseline.py -x ${ZAP_REPORT_NAME} -t ${TARGET_URL}"
+              // Other scanner options ...
+              // zap-api-scan errors out
+              // script: "/zap/zap-api-scan.py -x ${ZAP_REPORT_NAME} -t ${API_TARGET_URL} -f ${API_FORMAT}"
+              // script: "/zap/zap-full-scan.py -x ${ZAP_REPORT_NAME} -t ${TARGET_URL}"
+            )
+            echo "Return value is: ${retVal}"
 
-              // The ZAP scripts are installed on the root of the jenkins-slave-zap image.
-              // When running ZAP from there the reports will be created in /zap/wrk/ by default.
-              // ZAP has problems with creating the reports directly in the Jenkins
-              // working directory, so they have to be copied over after the fact.
-              def retVal = sh (
-                returnStatus: true,
-                script: "/zap/zap-baseline.py -x ${ZAP_REPORT_NAME} -t ${TARGET_URL}"
-                // Other scanner options ...
-                // zap-api-scan errors out
-                // script: "/zap/zap-api-scan.py -x ${ZAP_REPORT_NAME} -t ${API_TARGET_URL} -f ${API_FORMAT}"
-                // script: "/zap/zap-full-scan.py -x ${ZAP_REPORT_NAME} -t ${TARGET_URL}"
-              )
-              echo "Return value is: ${retVal}"
-
-              // Copy the ZAP report into the Jenkins working directory so the Jenkins tools can access it.
-              sh (
-                returnStdout: true,
-                script: "mkdir -p ./wrk/ && cp /zap/wrk/${ZAP_REPORT_NAME} ./wrk/"
-              )
-            }
-
-            // Stash the ZAP report for publishing in a different stage (which will run on a different pod).
-            echo "Stash the report for the publishing stage ..."
-            stash name: "${ZAP_REPORT_STASH}", includes: "zap/wrk/*.xml"
+            // Copy the ZAP report into the Jenkins working directory so the Jenkins tools can access it.
+            sh (
+              returnStdout: true,
+              script: "mkdir -p ./wrk/ && cp /zap/wrk/${ZAP_REPORT_NAME} ./wrk/"
+            )
           }
+
+          // Stash the ZAP report for publishing in a different stage (which will run on a different pod).
+          echo "Stash the report for the publishing stage ..."
+          stash name: "${ZAP_REPORT_STASH}", includes: "zap/wrk/*.xml"
+
         }
       }
     }
@@ -306,66 +304,62 @@ def postZapToSonar () {
         ]
       ){
         node('jenkins-python3nodejs') {
+          // The name  of the ZAP report
+          def ZAP_REPORT_NAME = "zap-report.xml"
 
-          stage('Publish ZAP Report to SonarQube') {
+          // The location of the ZAP reports
+          def ZAP_REPORT_PATH = "/zap/wrk/${ZAP_REPORT_NAME}"
 
-             // The name  of the ZAP report
-            def ZAP_REPORT_NAME = "zap-report.xml"
+          // The name of the "stash" containing the ZAP report
+          def ZAP_REPORT_STASH = "zap-report"
 
-            // The location of the ZAP reports
-            def ZAP_REPORT_PATH = "/zap/wrk/${ZAP_REPORT_NAME}"
+          // Do a sparse checkout of the sonar-runner folder since it is the only
+          // part of the project we need to publish the ZAP report to SonarQube.
+          // We're not scanning our source code here ...
+          //
+          // For this to work the Jenkins Administrator may have to approve the following methods;
+          // - method hudson.plugins.git.GitSCM getBranches
+          // - method hudson.plugins.git.GitSCM getUserRemoteConfigs
+          // - method hudson.plugins.git.GitSCMBackwardCompatibility getExtensions
+          // - staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods plus java.util.Collection java.lang.Object
+          echo "Checking out the sonar-runner folder ..."
+          checkout scm
 
-            // The name of the "stash" containing the ZAP report
-            def ZAP_REPORT_STASH = "zap-report"
+          echo "Preparing the report for the publishing ..."
+          unstash name: "${ZAP_REPORT_STASH}"
 
-            // Do a sparse checkout of the sonar-runner folder since it is the only
-            // part of the project we need to publish the ZAP report to SonarQube.
-            // We're not scanning our source code here ...
+          SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
+          echo "${SONARQUBE_URL}"
+
+          echo "Publishing the report ..."
+          // The `sonar-runner` MUST exist in your project and contain a Gradle environment consisting of:
+          // - Gradle wrapper script(s)
+          // - A simple `build.gradle` file that includes the SonarQube plug-in.
+          //
+          // An example can be found here:
+          // - https://github.com/BCDevOps/sonarqube
+          dir('sonar-runner') {
+            // ======================================================================================================
+            // Set your SonarQube scanner properties at this level, not at the Gradle Build level.
+            // The only thing that should be defined at the Gradle Build level is a minimal set of generic defaults.
             //
-            // For this to work the Jenkins Administrator may have to approve the following methods;
-            // - method hudson.plugins.git.GitSCM getBranches
-            // - method hudson.plugins.git.GitSCM getUserRemoteConfigs
-            // - method hudson.plugins.git.GitSCMBackwardCompatibility getExtensions
-            // - staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods plus java.util.Collection java.lang.Object
-            echo "Checking out the sonar-runner folder ..."
-            checkout scm
-
-            echo "Preparing the report for the publishing ..."
-            unstash name: "${ZAP_REPORT_STASH}"
-
-            SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
-            echo "${SONARQUBE_URL}"
-
-            echo "Publishing the report ..."
-            // The `sonar-runner` MUST exist in your project and contain a Gradle environment consisting of:
-            // - Gradle wrapper script(s)
-            // - A simple `build.gradle` file that includes the SonarQube plug-in.
-            //
-            // An example can be found here:
-            // - https://github.com/BCDevOps/sonarqube
-            dir('sonar-runner') {
-              // ======================================================================================================
-              // Set your SonarQube scanner properties at this level, not at the Gradle Build level.
-              // The only thing that should be defined at the Gradle Build level is a minimal set of generic defaults.
-              //
-              // For more information on available properties visit:
-              // - https://docs.sonarqube.org/display/SCAN/Analyzing+with+SonarQube+Scanner+for+Gradle
-              // ======================================================================================================
-              sh (
-                // 'sonar.zaproxy.reportPath' must be set to the absolute path of the xml formatted ZAP report.
-                // Exclude the report from being scanned as an xml file.  We only care about the results of the ZAP scan.
-                returnStdout: true,
-                script: "./gradlew sonarqube --stacktrace --info \
-                  -Dsonar.verbose=true \
-                  -Dsonar.host.url=${SONARQUBE_URL} \
-                  -Dsonar.projectName='eagle-admin'\
-                  -Dsonar.projectKey='org.sonarqube:eagle-admin' \
-                  -Dsonar.projectBaseDir='../' \
-                  -Dsonar.sources='./src/app' \
-                  -Dsonar.zaproxy.reportPath=${WORKSPACE}${ZAP_REPORT_PATH} \
-                  -Dsonar.exclusions=**/*.xml"
-              )
-            }
+            // For more information on available properties visit:
+            // - https://docs.sonarqube.org/display/SCAN/Analyzing+with+SonarQube+Scanner+for+Gradle
+            // ======================================================================================================
+            sh (
+              // 'sonar.zaproxy.reportPath' must be set to the absolute path of the xml formatted ZAP report.
+              // Exclude the report from being scanned as an xml file.  We only care about the results of the ZAP scan.
+              returnStdout: true,
+              script: "./gradlew sonarqube --stacktrace --info \
+                -Dsonar.verbose=true \
+                -Dsonar.host.url=${SONARQUBE_URL} \
+                -Dsonar.projectName='eagle-admin'\
+                -Dsonar.projectKey='org.sonarqube:eagle-admin' \
+                -Dsonar.projectBaseDir='../' \
+                -Dsonar.sources='./src/app' \
+                -Dsonar.zaproxy.reportPath=${WORKSPACE}${ZAP_REPORT_PATH} \
+                -Dsonar.exclusions=**/*.xml"
+            )
           }
         }
       }
@@ -441,14 +435,14 @@ pipeline {
         //   }
         // }
 
-        stage('Sonarqube') {
-          steps {
-            script {
-              echo "Running Sonarqube"
-              def result = nodejsSonarqube()
-            }
-          }
-        }
+        // stage('Sonarqube') {
+        //   steps {
+        //     script {
+        //       echo "Running Sonarqube"
+        //       def result = nodejsSonarqube()
+        //     }
+        //   }
+        // }
       }
     }
 
