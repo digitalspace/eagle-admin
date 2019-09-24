@@ -376,9 +376,9 @@ pipeline {
     disableResume()
   }
   stages {
-    stage('Parallel Build Steps') {
-      failFast true
-      parallel {
+    // stage('Parallel Build Steps') {
+    //   failFast true
+    //   parallel {
         // stage('Build') {
         //   agent any
         //   steps {
@@ -443,8 +443,8 @@ pipeline {
         //     }
         //   }
         // }
-      }
-    }
+    //   }
+    // }
 
     // stage('Deploy to dev'){
     //   steps {
