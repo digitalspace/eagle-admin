@@ -163,9 +163,6 @@ def nodejsSonarqube () {
               SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
               echo "${SONARQUBE_URL}"
 
-              sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
-              ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
-
               sh "npm install typescript"
               sh returnStdout: true, script: "./gradlew sonarqube -Dsonar.host.url=${SONARQUBE_URL} -Dsonar. -Dsonar.verbose=true --stacktrace --info"
 
@@ -182,10 +179,10 @@ def nodejsSonarqube () {
               if ( "${SONARQUBE_STATUS}" == "ERROR") {
                 echo "Scan Failed"
 
-                notifyRocketChat(
-                  "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Sonarqube scan failed: : ${SONARQUBE_URL}",
-                  ROCKET_DEPLOY_WEBHOOK
-                )
+                // notifyRocketChat(
+                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Sonarqube scan failed: : ${SONARQUBE_URL}",
+                //   ROCKET_DEPLOY_WEBHOOK
+                // )
 
                 currentBuild.result = 'FAILURE'
                 exit 1
@@ -194,10 +191,10 @@ def nodejsSonarqube () {
               }
 
             } catch (error) {
-              notifyRocketChat(
-                "@all The latest build of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n ${error.message}",
-                ROCKET_DEPLOY_WEBHOOK
-              )
+              // notifyRocketChat(
+              //   "@all The latest build of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n ${error.message}",
+              //   ROCKET_DEPLOY_WEBHOOK
+              // )
               throw error
             } finally {
               echo "Sonarqube Scan Complete"
@@ -312,9 +309,6 @@ def postZapToSonar () {
           // The name of the "stash" containing the ZAP report
           def ZAP_REPORT_STASH = "zap-report"
 
-          sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
-          ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
-
           echo "Checking out the sonar-runner folder ..."
           checkout scm
 
@@ -353,10 +347,10 @@ def postZapToSonar () {
               if ( "${ZAP_STATUS}" == "ERROR") {
                 echo "ZAP Scan Failed"
 
-                notifyRocketChat(
-                  "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Zap scan failed: ${SONARQUBE_URL}",
-                  ROCKET_DEPLOY_WEBHOOK
-                )
+                // notifyRocketChat(
+                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Zap scan failed: ${SONARQUBE_URL}",
+                //   ROCKET_DEPLOY_WEBHOOK
+                // )
 
                 currentBuild.result = 'FAILURE'
                 exit 1
@@ -410,10 +404,10 @@ pipeline {
                   returnStdout: true).trim()
                 echo ">> IMAGE_HASH: ${IMAGE_HASH}"
               } catch (error) {
-                notifyRocketChat(
-                  "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: \n ${error.message}",
-                  ROCKET_QA_WEBHOOK
-                )
+                // notifyRocketChat(
+                //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: \n ${error.message}",
+                //   ROCKET_QA_WEBHOOK
+                // )
                 throw error
               }
             }
@@ -460,20 +454,20 @@ pipeline {
             openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'esm-dev', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
             echo ">>>> Deployment Complete"
 
-            notifyRocketChat(
-              "A new version of eagle-admin is now in Dev, build ${env.BUILD_DISPLAY_NAME} \n Changes: \n ${CHANGELOG}",
-              ROCKET_DEPLOY_WEBHOOK
-            )
+            // notifyRocketChat(
+            //   "A new version of eagle-admin is now in Dev, build ${env.BUILD_DISPLAY_NAME} \n Changes: \n ${CHANGELOG}",
+            //   ROCKET_DEPLOY_WEBHOOK
+            // )
 
-            notifyRocketChat(
-              "@all A new version of eagle-admin is now in Dev and ready for QA. \n Changes to Dev: \n ${CHANGELOG}",
-              ROCKET_QA_WEBHOOK
-            )
+            // notifyRocketChat(
+            //   "@all A new version of eagle-admin is now in Dev and ready for QA. \n Changes to Dev: \n ${CHANGELOG}",
+            //   ROCKET_QA_WEBHOOK
+            // )
           } catch (error) {
-            notifyRocketChat(
-              "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: ${error.message}",
-              ROCKET_DEPLOY_WEBHOOK
-            )
+            // notifyRocketChat(
+            //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: ${error.message}",
+            //   ROCKET_DEPLOY_WEBHOOK
+            // )
             currentBuild.result = "FAILURE"
             throw new Exception("Deploy failed")
           }
