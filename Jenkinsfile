@@ -477,7 +477,11 @@ pipeline {
 
             // def jsonSlurper = new JsonSlurper()
             // def testImageName = jsonSlurper.parseText(testOut).name
-            echo "test: ${testOut.name}"
+            echo "test:"
+
+            testGetImageName = $testOut.toString().split(":")[3]
+
+            echo "${testGetImageName}"
 
 
             echo "Deploying to dev..."
