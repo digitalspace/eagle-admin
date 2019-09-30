@@ -23,8 +23,10 @@ boolean checkDeploymentIsUp(String application, String project, def iterations =
   def maxWaitSeconds=$(((1<<iterations+1)-1))
   echo "Detecting pods for project ${project} deployment ${application}.  Waiting for up to ${maxWaitSeconds} seconds..."
 
+  def delay = 0
+
   for (bit=0; bit<iterations; bit++) {
-    def delay = sh "$((1<<bit))"
+    delay = sh "\$((1<<bit))"
     sleep $delay
     def pods = sh "oc get pods --selector app=${application} -n ${project} -o name 2>&1"
     if (bla) {
