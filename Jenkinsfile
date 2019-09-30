@@ -469,31 +469,36 @@ pipeline {
           try {
             echo "Backing up dev image..."
             openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev-backup', srcStream: 'eagle-admin', srcTag: 'dev'
-            sleep 5
 
-            def testOut = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1"
+            def devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
+            echo "${devImageName}"
 
-            echo "raw output is: ${testOut}"
+            def devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
+            echo "${devBackupImageName}"
 
-            def bla = testOut.trim()
+            while (devImageName != devBackupImageName) {
+              echo "while 1"
+              sleep(5)
+              devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
+              echo "${devBackupImageName}"
+            }
 
-            echo "bla is:"
-            echo "${bla}"
-
-            // def jsonSlurper = new JsonSlurper()
-            // def testImageName = jsonSlurper.parseText(testOut).name
-            echo "test:"
-
-            def testArr
-
-            sh "IFS=':' read -r -a testArr <<< ${bla}"
-
-            echo "${testArr[2]}"
 
 
             echo "Deploying to dev..."
             openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev', srcStream: 'eagle-admin', srcTag: "${IMAGE_HASH}"
-            sleep 5
+
+            devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
+            echo "${devImageName}"
+
+            while (devImageName == devBackupImageName) {
+              echo "while 2"
+              sleep(5)
+              devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
+              echo "${devImageName}"
+            }
+
+
 
             openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'mem-mmti-prod', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
             echo ">>>> Deployment Complete"
