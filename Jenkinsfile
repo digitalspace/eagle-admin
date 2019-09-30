@@ -393,46 +393,46 @@ pipeline {
     disableResume()
   }
   stages {
-    // stage('Parallel Build Steps') {
-    //   failFast true
-    //   parallel {
-    //     stage('Build') {
-    //       agent any
-    //       steps {
-    //         script {
-    //           pastBuilds = []
-    //           buildsSinceLastSuccess(pastBuilds, currentBuild);
-    //           CHANGELOG = getChangeLog(pastBuilds);
+    stage('Parallel Build Steps') {
+      failFast true
+      parallel {
+        stage('Build') {
+          agent any
+          steps {
+            script {
+              pastBuilds = []
+              buildsSinceLastSuccess(pastBuilds, currentBuild);
+              CHANGELOG = getChangeLog(pastBuilds);
 
-    //           echo ">>>>>>Changelog: \n ${CHANGELOG}"
+              echo ">>>>>>Changelog: \n ${CHANGELOG}"
 
-    //           try {
-    //             sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
-    //             ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
-    //             ROCKET_QA_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-qa-webhook')
+              try {
+                sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
+                ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
+                ROCKET_QA_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-qa-webhook')
 
-    //             echo "Building eagle-admin develop branch"
-    //             openshiftBuild bldCfg: 'eagle-admin-angular', showBuildLogs: 'true'
-    //             openshiftBuild bldCfg: 'eagle-admin-build', showBuildLogs: 'true'
-    //             echo "Build done"
+                echo "Building eagle-admin develop branch"
+                openshiftBuild bldCfg: 'eagle-admin-angular', showBuildLogs: 'true'
+                openshiftBuild bldCfg: 'eagle-admin-build', showBuildLogs: 'true'
+                echo "Build done"
 
-    //             echo ">>> Get Image Hash"
-    //             // Don't tag with BUILD_ID so the pruner can do it's job; it won't delete tagged images.
-    //             // Tag the images for deployment based on the image's hash
-    //             IMAGE_HASH = sh (
-    //               script: """oc get istag eagle-admin:latest -o template --template=\"{{.image.dockerImageReference}}\"|awk -F \":\" \'{print \$3}\'""",
-    //               returnStdout: true).trim()
-    //             echo ">> IMAGE_HASH: ${IMAGE_HASH}"
-    //           } catch (error) {
-    //             // notifyRocketChat(
-    //             //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: \n ${error.message}",
-    //             //   ROCKET_QA_WEBHOOK
-    //             // )
-    //             throw error
-    //           }
-    //         }
-    //       }
-    //     }
+                echo ">>> Get Image Hash"
+                // Don't tag with BUILD_ID so the pruner can do it's job; it won't delete tagged images.
+                // Tag the images for deployment based on the image's hash
+                IMAGE_HASH = sh (
+                  script: """oc get istag eagle-admin:latest -o template --template=\"{{.image.dockerImageReference}}\"|awk -F \":\" \'{print \$3}\'""",
+                  returnStdout: true).trim()
+                echo ">> IMAGE_HASH: ${IMAGE_HASH}"
+              } catch (error) {
+                // notifyRocketChat(
+                //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: \n ${error.message}",
+                //   ROCKET_QA_WEBHOOK
+                // )
+                throw error
+              }
+            }
+          }
+        }
 
         //  stage('Unit Tests') {
         //   steps {
@@ -460,8 +460,8 @@ pipeline {
         //     }
         //   }
         // }
-    //   }
-    // }
+      }
+    }
 
     stage('Deploy to dev'){
       steps {
