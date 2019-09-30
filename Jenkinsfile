@@ -473,7 +473,7 @@ pipeline {
 
             def testOut = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev"
 
-            echo "raw output is: ${testOut}"
+            echo "raw output is: ${testOut//[$'\t\r\n ']}"
 
             // def jsonSlurper = new JsonSlurper()
             // def testImageName = jsonSlurper.parseText(testOut).name
