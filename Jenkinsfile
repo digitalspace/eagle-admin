@@ -471,9 +471,7 @@ pipeline {
             openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev-backup', srcStream: 'eagle-admin', srcTag: 'dev'
             sleep 5
 
-            def testOut = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev "
-
-            testOut =  $testOut
+            def testOut = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev"
 
             echo "raw output is: ${testOut}"
 
@@ -483,7 +481,7 @@ pipeline {
 
             def testArr
 
-            sh "IFS=':' read -r -a testArr <<< ${test}"
+            sh "IFS=':' read -r -a testArr <<< ${testOut}"
 
             echo "${testArr[2]}"
 
