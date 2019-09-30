@@ -471,9 +471,14 @@ pipeline {
             openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev-backup', srcStream: 'eagle-admin', srcTag: 'dev'
             sleep 5
 
-            def testOut = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev".trim()
+            def testOut = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev"
 
             echo "raw output is: ${testOut}"
+
+            def bla = testOut.trim()
+
+            echo "bla is:"
+            echo "${bla}"
 
             // def jsonSlurper = new JsonSlurper()
             // def testImageName = jsonSlurper.parseText(testOut).name
@@ -481,7 +486,7 @@ pipeline {
 
             def testArr
 
-            sh "IFS=':' read -r -a testArr <<< ${testOut}"
+            sh "IFS=':' read -r -a testArr <<< ${bla}"
 
             echo "${testArr[2]}"
 
