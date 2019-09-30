@@ -471,19 +471,21 @@ pipeline {
             openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev-backup', srcStream: 'eagle-admin', srcTag: 'dev'
             sleep 5
 
-            def testOut = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev"
+            def testOut = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | tr "
 
-            testOut =  $testOut.toString()
+            testOut =  $testOut
 
-            echo "raw output is: ${testOut.toString()}"
+            echo "raw output is: ${testOut}"
 
             // def jsonSlurper = new JsonSlurper()
             // def testImageName = jsonSlurper.parseText(testOut).name
             echo "test:"
 
-            testGetImageName = $testOut.toString().split(":")[3]
+            def testArr
 
-            echo "${testGetImageName}"
+            sh "IFS=':' read -r -a testArr <<< ${test}"
+
+            echo "${testArr[2]}"
 
 
             echo "Deploying to dev..."
