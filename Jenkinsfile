@@ -18,6 +18,24 @@ String getUrlForRoute(String routeName, String projectNameSpace = '') {
   return url
 }
 
+boolean checkDeploymentIsUp(String application, String project, def iterations = 6 ){ // 2^6 factorial = 127 seconds
+
+  def maxWaitSeconds=$(((1<<iterations+1)-1))
+  echo "Detecting pods for project ${project} deployment ${application}.  Waiting for up to ${maxWaitSeconds} seconds..."
+
+  for (bit=0; bit<iterations; bit++) {
+    def delay = sh "$((1<<bit))"
+    sleep $delay
+    def pods = sh "oc get pods --selector app=${application} -n ${project} -o name 2>&1"
+    if (bla) {
+      echo "Detected pods for project ${project} deployment ${application}.  Pods: ${pods}"
+      return true
+    }
+  }
+  echo "Tried to detect running pods for project ${project} deployment ${application} and failed."
+  return false
+}
+
 /*
  * Sends a rocket chat notification
  */
@@ -373,46 +391,46 @@ pipeline {
     disableResume()
   }
   stages {
-    stage('Parallel Build Steps') {
-      failFast true
-      parallel {
-        stage('Build') {
-          agent any
-          steps {
-            script {
-              pastBuilds = []
-              buildsSinceLastSuccess(pastBuilds, currentBuild);
-              CHANGELOG = getChangeLog(pastBuilds);
+    // stage('Parallel Build Steps') {
+    //   failFast true
+    //   parallel {
+    //     stage('Build') {
+    //       agent any
+    //       steps {
+    //         script {
+    //           pastBuilds = []
+    //           buildsSinceLastSuccess(pastBuilds, currentBuild);
+    //           CHANGELOG = getChangeLog(pastBuilds);
 
-              echo ">>>>>>Changelog: \n ${CHANGELOG}"
+    //           echo ">>>>>>Changelog: \n ${CHANGELOG}"
 
-              try {
-                sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
-                ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
-                ROCKET_QA_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-qa-webhook')
+    //           try {
+    //             sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
+    //             ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
+    //             ROCKET_QA_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-qa-webhook')
 
-                echo "Building eagle-admin develop branch"
-                openshiftBuild bldCfg: 'eagle-admin-angular', showBuildLogs: 'true'
-                openshiftBuild bldCfg: 'eagle-admin-build', showBuildLogs: 'true'
-                echo "Build done"
+    //             echo "Building eagle-admin develop branch"
+    //             openshiftBuild bldCfg: 'eagle-admin-angular', showBuildLogs: 'true'
+    //             openshiftBuild bldCfg: 'eagle-admin-build', showBuildLogs: 'true'
+    //             echo "Build done"
 
-                echo ">>> Get Image Hash"
-                // Don't tag with BUILD_ID so the pruner can do it's job; it won't delete tagged images.
-                // Tag the images for deployment based on the image's hash
-                IMAGE_HASH = sh (
-                  script: """oc get istag eagle-admin:latest -o template --template=\"{{.image.dockerImageReference}}\"|awk -F \":\" \'{print \$3}\'""",
-                  returnStdout: true).trim()
-                echo ">> IMAGE_HASH: ${IMAGE_HASH}"
-              } catch (error) {
-                // notifyRocketChat(
-                //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: \n ${error.message}",
-                //   ROCKET_QA_WEBHOOK
-                // )
-                throw error
-              }
-            }
-          }
-        }
+    //             echo ">>> Get Image Hash"
+    //             // Don't tag with BUILD_ID so the pruner can do it's job; it won't delete tagged images.
+    //             // Tag the images for deployment based on the image's hash
+    //             IMAGE_HASH = sh (
+    //               script: """oc get istag eagle-admin:latest -o template --template=\"{{.image.dockerImageReference}}\"|awk -F \":\" \'{print \$3}\'""",
+    //               returnStdout: true).trim()
+    //             echo ">> IMAGE_HASH: ${IMAGE_HASH}"
+    //           } catch (error) {
+    //             // notifyRocketChat(
+    //             //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: \n ${error.message}",
+    //             //   ROCKET_QA_WEBHOOK
+    //             // )
+    //             throw error
+    //           }
+    //         }
+    //       }
+    //     }
 
         //  stage('Unit Tests') {
         //   steps {
@@ -423,35 +441,44 @@ pipeline {
         //   }
         // }
 
-        stage('Linting') {
-          steps {
-            script {
-              echo "Running linter"
-              def results = nodejsLinter()
-            }
-          }
-        }
+        // stage('Linting') {
+        //   steps {
+        //     script {
+        //       echo "Running linter"
+        //       def results = nodejsLinter()
+        //     }
+        //   }
+        // }
 
-        stage('Sonarqube') {
-          steps {
-            script {
-              echo "Running Sonarqube"
-              def result = nodejsSonarqube()
-            }
-          }
-        }
-      }
-    }
+        // stage('Sonarqube') {
+        //   steps {
+        //     script {
+        //       echo "Running Sonarqube"
+        //       def result = nodejsSonarqube()
+        //     }
+        //   }
+        // }
+    //   }
+    // }
 
     stage('Deploy to dev'){
       steps {
         script {
           try {
+            echo "Backing up dev image..."
+            openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev-backup', srcStream: 'eagle-admin', srcTag: 'dev'
+            sleep 5
+
+            def testOut = sh "oc describe istag/eagle-admin:dev"
+
+            echo "${testOut}"
+
+
             echo "Deploying to dev..."
             openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev', srcStream: 'eagle-admin', srcTag: "${IMAGE_HASH}"
             sleep 5
 
-            openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'esm-dev', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
+            openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'mem-mmti-prod', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
             echo ">>>> Deployment Complete"
 
             // notifyRocketChat(
