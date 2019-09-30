@@ -471,7 +471,7 @@ pipeline {
             openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev-backup', srcStream: 'eagle-admin', srcTag: 'dev'
             sleep 5
 
-            def testOut = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | tr -d '\r'"
+            def testOut = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | sed -e 's/\r//g'"
 
             echo "raw output is: ${testOut}"
 
