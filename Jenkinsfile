@@ -214,9 +214,9 @@ def nodejsSonarqube () {
               def NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
               echo "6"
 
-              for (int i=0; i<MAX_ITERATIONS; i++){
+              for (int i=0; i<MAX_ITERATIONS; i++) {
                 echo "waiting for backup, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
-                if(NEW_ZAP_DATE != OLD_ZAP_DATE){
+                if (NEW_ZAP_DATE != OLD_ZAP_DATE) {
                   REPORT_PUBLISHED = true
                   break
                 } else {
@@ -259,6 +259,7 @@ def nodejsSonarqube () {
               //   "@all The latest build of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n ${error.message}",
               //   ROCKET_DEPLOY_WEBHOOK
               // )
+              echo "Failure, in catch"
               throw error
             } finally {
               echo "Sonarqube Scan Complete"
