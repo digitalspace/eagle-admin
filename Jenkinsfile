@@ -69,7 +69,6 @@ def sonarGetStatus (jsonPayload) {
  */
 def sonarGetDate (jsonPayload) {
   def jsonSlurper = new JsonSlurper()
-  // .periods.date
   return jsonSlurper.parseText(jsonPayload).projectStatus.periods[0].date
 }
 
@@ -207,14 +206,7 @@ def nodejsSonarqube () {
 
               // check that sonar report is updated
               def NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
-
-              echo "${NEW_ZAP_DATE_JSON}"
-
               def NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
-
-              echo "${NEW_ZAP_DATE}"
-
-              exit 1
 
               for (int i=0; i<MAX_ITERATIONS; i++){
                 echo "waiting for backup, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
