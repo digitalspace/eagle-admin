@@ -70,7 +70,7 @@ def sonarGetStatus (jsonPayload) {
 def sonarGetDate (jsonPayload) {
   def jsonSlurper = new JsonSlurper()
   // .periods.date
-  return jsonSlurper.parseText(jsonPayload).projectStatus
+  return jsonSlurper.parseText(jsonPayload).projectStatus.periods[0].date
 }
 
 /*
