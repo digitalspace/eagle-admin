@@ -64,6 +64,15 @@ def sonarGetStatus (jsonPayload) {
 }
 
 /*
+ * takes in a sonarqube status json payload
+ * and returns the date string
+ */
+def sonarGetDate (jsonPayload) {
+  def jsonSlurper = new JsonSlurper()
+  return jsonSlurper.parseText(jsonPayload).projectStatus.date
+}
+
+/*
  * Updates the global pastBuilds array: it will iterate recursively
  * and add all the builds prior to the current one that had a result
  * different than 'SUCCESS'.
@@ -180,14 +189,42 @@ def nodejsSonarqube () {
           dir('sonar-runner') {
             try {
               // run scan
-              SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
+              def SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
               echo "${SONARQUBE_URL}"
+
+              def SONARQUBE_STATUS_URL = "${SONARQUBE_URL}/api/qualitygates/project_status?projectKey=org.sonarqube:eagle-admin-zap-scan"
+
+              // get old sonar report date
+              def OLD_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
+              def OLD_ZAP_DATE = sonarGetDate (OLD_ZAP_DATE_JSON)
+
+              int MAX_ITERATIONS = 6
+              boolean REPORT_PUBLISHED = false
 
               sh "npm install typescript"
               sh returnStdout: true, script: "./gradlew sonarqube -Dsonar.host.url=${SONARQUBE_URL} -Dsonar. -Dsonar.verbose=true --stacktrace --info"
 
-              // wiat for scan status to update
-              sleep(30)
+              // check that sonar report is updated
+              def NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
+              def NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
+
+              for (int i=0; i<MAX_ITERATIONS; i++){
+                echo "waiting for backup, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
+                if(NEW_ZAP_DATE != OLD_ZAP_DATE){
+                  REPORT_PUBLISHED = true
+                  break
+                } else {
+                  delay = sh returnStdout: true, script: "\$((1<<${i}))"
+                  sleep(delay)
+                  NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
+                  NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)              }
+              }
+
+              if(!REPORT_PUBLISHED) {
+                echo "ERROR: Zap report failed to send"
+                currentBuild.result = "FAILURE"
+                exit 1
+              }
 
               // check if sonarqube passed
               sh("oc extract secret/sonarqube-status-urls --to=${env.WORKSPACE}/sonar-runner --confirm")
@@ -329,6 +366,15 @@ def postZapToSonar () {
           // The name of the "stash" containing the ZAP report
           def ZAP_REPORT_STASH = "zap-report"
 
+          def SONARQUBE_STATUS_URL = "${SONARQUBE_URL}/api/qualitygates/project_status?projectKey=org.sonarqube:eagle-admin-zap-scan"
+
+          // get old sonar report date
+          def OLD_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
+          def OLD_ZAP_DATE = sonarGetDate (OLD_ZAP_DATE_JSON)
+
+          int MAX_ITERATIONS = 6
+          boolean REPORT_PUBLISHED = false
+
           echo "Checking out the sonar-runner folder ..."
           checkout scm
 
@@ -355,28 +401,73 @@ def postZapToSonar () {
                 -Dsonar.exclusions=**/*.xml"
             )
 
-            // wiat for scan status to update
-              sleep(30)
+            // check that sonar report is updated
+            def NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
+            def NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
 
-              // check if zap passed
-              SONARQUBE_STATUS_URL = "${SONARQUBE_URL}/api/qualitygates/project_status?projectKey=org.sonarqube:eagle-admin-zap-scan"
-
-              ZAP_STATUS_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
-              ZAP_STATUS = sonarGetStatus (ZAP_STATUS_JSON)
-
-              if ( "${ZAP_STATUS}" == "ERROR") {
-                echo "ZAP Scan Failed"
-
-                // notifyRocketChat(
-                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Zap scan failed: ${SONARQUBE_URL}",
-                //   ROCKET_DEPLOY_WEBHOOK
-                // )
-
-                currentBuild.result = 'FAILURE'
-                exit 1
+            for (int i=0; i<MAX_ITERATIONS; i++){
+              echo "waiting for backup, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
+              if(NEW_ZAP_DATE != OLD_ZAP_DATE){
+                REPORT_PUBLISHED = true
+                break
               } else {
-                echo "ZAP Scan Passed"
+                delay = sh returnStdout: true, script: "\$((1<<${i}))"
+                sleep(delay)
+                NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
+                NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)              }
+            }
+
+            if(!REPORT_PUBLISHED) {
+              echo "ERROR: Zap report failed to send"
+              currentBuild.result = "FAILURE"
+              exit 1
+            }
+
+            // check if zap passed
+            ZAP_STATUS_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
+            ZAP_STATUS = sonarGetStatus (ZAP_STATUS_JSON)
+
+            if ( "${ZAP_STATUS}" == "ERROR") {
+              echo "ZAP Scan Failed"
+
+              def devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
+              def revertComplete = false
+
+              // revert dev from backup
+              echo "Reverting dev image form backup..."
+              openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev', srcStream: 'eagle-admin', srcTag: 'dev-backup'
+              def devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
+
+              // varify backup
+              for (int i=0; i<maxIterations; i++){
+                echo "waiting for revert, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
+                if(devImageName == devBackupImageName){
+                  revertComplete = true
+                  break
+                } else {
+                  delay = sh returnStdout: true, script: "\$((1<<${i}))"
+                  sleep(delay)
+                  devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
+                }
               }
+
+              if(!revertComplete) {
+                echo "ERROR: revert dev image failed, zap scan failed for current dev image, please revert amnually from the image: dev-backup"
+                currentBuild.result = "FAILURE"
+                exit 1
+              }
+
+              // notifyRocketChat(
+              //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Zap scan failed: ${SONARQUBE_URL}",
+              //   ROCKET_DEPLOY_WEBHOOK
+              // )
+
+              echo "Reverted dev deployment from backup"
+              currentBuild.result = 'FAILURE'
+              exit 1
+            } else {
+              echo "ZAP Scan Passed"
+            }
           }
         }
       }
@@ -473,15 +564,17 @@ pipeline {
             def deploymentComplete = false
             def maxIterations = 6
 
+            // backup
             echo "Backing up dev image..."
             openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev-backup', srcStream: 'eagle-admin', srcTag: 'dev'
-
             def devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
 
+            // varify backup
             for (int i=0; i<maxIterations; i++){
-              echo "waiting for backup, iterator is: ${i}, \n max iterator is ${maxIterations} \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
+              echo "waiting for backup, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
               if(devImageName == devBackupImageName){
                 backupComplete = true
+                break
               } else {
                 delay = sh returnStdout: true, script: "\$((1<<${i}))"
                 sleep(delay)
@@ -490,23 +583,22 @@ pipeline {
             }
 
             if(!backupComplete) {
-              echo "ERROR: backup failed"
+              echo "ERROR: backup dev image failed"
               currentBuild.result = "FAILURE"
               exit 1
             }
 
-
-
+            // deploy
             echo "Deploying to dev..."
             openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev', srcStream: 'eagle-admin', srcTag: "${IMAGE_HASH}"
-
             devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
-            echo "${devImageName}"
 
+            // varify deployment
             for (int i=0; i<maxIterations; i++){
               echo "waiting for deployment, iterator is: ${i}, \n max iterator is ${maxIterations} \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
               if(devImageName != devBackupImageName){
                 deploymentComplete = true
+                break
               } else {
                 delay = sh returnStdout: true, script: "\$((1<<${i}))"
                 sleep(delay)
@@ -519,8 +611,6 @@ pipeline {
               currentBuild.result = "FAILURE"
               exit 1
             }
-
-
 
             openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'mem-mmti-prod', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
             echo ">>>> Deployment Complete"
