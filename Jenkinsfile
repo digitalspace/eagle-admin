@@ -201,7 +201,7 @@ def nodejsSonarqube () {
               def OLD_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
               def OLD_ZAP_DATE = sonarGetDate (OLD_ZAP_DATE_JSON)
 
-              int MAX_ITERATIONS = 6
+              int MAX_ITERATIONS = 10
               boolean REPORT_PUBLISHED = false
 
               sh "npm install typescript"
@@ -374,13 +374,15 @@ def postZapToSonar () {
           // The name of the "stash" containing the ZAP report
           def ZAP_REPORT_STASH = "zap-report"
 
+          def SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
+          echo "${SONARQUBE_URL}"
           def SONARQUBE_STATUS_URL = "${SONARQUBE_URL}/api/qualitygates/project_status?projectKey=org.sonarqube:eagle-admin-zap-scan"
 
           // get old sonar report date
           def OLD_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
           def OLD_ZAP_DATE = sonarGetDate (OLD_ZAP_DATE_JSON)
 
-          int MAX_ITERATIONS = 6
+          int MAX_ITERATIONS = 10
           boolean REPORT_PUBLISHED = false
 
           echo "Checking out the sonar-runner folder ..."
@@ -388,9 +390,6 @@ def postZapToSonar () {
 
           echo "Preparing the report for the publishing ..."
           unstash name: "${ZAP_REPORT_STASH}"
-
-          SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
-          echo "${SONARQUBE_URL}"
 
           echo "Publishing the report ..."
           dir('sonar-runner') {
@@ -413,16 +412,17 @@ def postZapToSonar () {
             def NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
             def NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
 
-            for (int i=0; i<MAX_ITERATIONS; i++){
-              echo "waiting for backup, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
-              if(NEW_ZAP_DATE != OLD_ZAP_DATE){
+            for (int i=0; i<MAX_ITERATIONS; i++) {
+              echo "waiting for sonarqube report, iterator is: ${i}, \n Old Date: ${OLD_ZAP_DATE} \n New Date: ${NEW_ZAP_DATE}"
+              if (NEW_ZAP_DATE != OLD_ZAP_DATE) {
                 REPORT_PUBLISHED = true
                 break
               } else {
                 delay = i * 2
                 sleep(delay)
                 NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
-                NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)              }
+                NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
+              }
             }
 
             if(!REPORT_PUBLISHED) {
@@ -492,157 +492,157 @@ pipeline {
     disableResume()
   }
   stages {
-    stage('Parallel Build Steps') {
-      failFast true
-      parallel {
-        stage('Build') {
-          agent any
-          steps {
-            script {
-              pastBuilds = []
-              buildsSinceLastSuccess(pastBuilds, currentBuild);
-              CHANGELOG = getChangeLog(pastBuilds);
+    // stage('Parallel Build Steps') {
+    //   failFast true
+    //   parallel {
+    //     stage('Build') {
+    //       agent any
+    //       steps {
+    //         script {
+    //           pastBuilds = []
+    //           buildsSinceLastSuccess(pastBuilds, currentBuild);
+    //           CHANGELOG = getChangeLog(pastBuilds);
 
-              echo ">>>>>>Changelog: \n ${CHANGELOG}"
+    //           echo ">>>>>>Changelog: \n ${CHANGELOG}"
 
-              try {
-                sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
-                ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
-                ROCKET_QA_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-qa-webhook')
+    //           try {
+    //             sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
+    //             ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
+    //             ROCKET_QA_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-qa-webhook')
 
-                echo "Building eagle-admin develop branch"
-                openshiftBuild bldCfg: 'eagle-admin-angular', showBuildLogs: 'true'
-                openshiftBuild bldCfg: 'eagle-admin-build', showBuildLogs: 'true'
-                echo "Build done"
+    //             echo "Building eagle-admin develop branch"
+    //             openshiftBuild bldCfg: 'eagle-admin-angular', showBuildLogs: 'true'
+    //             openshiftBuild bldCfg: 'eagle-admin-build', showBuildLogs: 'true'
+    //             echo "Build done"
 
-                echo ">>> Get Image Hash"
-                // Don't tag with BUILD_ID so the pruner can do it's job; it won't delete tagged images.
-                // Tag the images for deployment based on the image's hash
-                IMAGE_HASH = sh (
-                  script: """oc get istag eagle-admin:latest -o template --template=\"{{.image.dockerImageReference}}\"|awk -F \":\" \'{print \$3}\'""",
-                  returnStdout: true).trim()
-                echo ">> IMAGE_HASH: ${IMAGE_HASH}"
-              } catch (error) {
-                // notifyRocketChat(
-                //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: \n ${error.message}",
-                //   ROCKET_QA_WEBHOOK
-                // )
-                throw error
-              }
-            }
-          }
-        }
+    //             echo ">>> Get Image Hash"
+    //             // Don't tag with BUILD_ID so the pruner can do it's job; it won't delete tagged images.
+    //             // Tag the images for deployment based on the image's hash
+    //             IMAGE_HASH = sh (
+    //               script: """oc get istag eagle-admin:latest -o template --template=\"{{.image.dockerImageReference}}\"|awk -F \":\" \'{print \$3}\'""",
+    //               returnStdout: true).trim()
+    //             echo ">> IMAGE_HASH: ${IMAGE_HASH}"
+    //           } catch (error) {
+    //             // notifyRocketChat(
+    //             //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: \n ${error.message}",
+    //             //   ROCKET_QA_WEBHOOK
+    //             // )
+    //             throw error
+    //           }
+    //         }
+    //       }
+    //     }
 
-        //  stage('Unit Tests') {
-        //   steps {
-        //     script {
-        //       echo "Running unit tests"
-        //       def results = nodejsTester()
-        //     }
-        //   }
-        // }
+    //     //  stage('Unit Tests') {
+    //     //   steps {
+    //     //     script {
+    //     //       echo "Running unit tests"
+    //     //       def results = nodejsTester()
+    //     //     }
+    //     //   }
+    //     // }
 
-        // stage('Linting') {
-        //   steps {
-        //     script {
-        //       echo "Running linter"
-        //       def results = nodejsLinter()
-        //     }
-        //   }
-        // }
+    //     // stage('Linting') {
+    //     //   steps {
+    //     //     script {
+    //     //       echo "Running linter"
+    //     //       def results = nodejsLinter()
+    //     //     }
+    //     //   }
+    //     // }
 
-        stage('Sonarqube') {
-          steps {
-            script {
-              echo "Running Sonarqube"
-              def result = nodejsSonarqube()
-            }
-          }
-        }
-      }
-    }
+    //     stage('Sonarqube') {
+    //       steps {
+    //         script {
+    //           echo "Running Sonarqube"
+    //           def result = nodejsSonarqube()
+    //         }
+    //       }
+    //     }
+    //   }
+    // }
 
-    stage('Deploy to dev'){
-      steps {
-        script {
-          try {
-            def devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
-            def delay = 0
-            def backupComplete = false;
-            def deploymentComplete = false
-            def maxIterations = 6
+    // stage('Deploy to dev'){
+    //   steps {
+    //     script {
+    //       try {
+    //         def devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
+    //         def delay = 0
+    //         def backupComplete = false;
+    //         def deploymentComplete = false
+    //         def maxIterations = 6
 
-            // backup
-            echo "Backing up dev image..."
-            openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev-backup', srcStream: 'eagle-admin', srcTag: 'dev'
-            def devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
+    //         // backup
+    //         echo "Backing up dev image..."
+    //         openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev-backup', srcStream: 'eagle-admin', srcTag: 'dev'
+    //         def devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
 
-            // varify backup
-            for (int i=0; i<maxIterations; i++){
-              echo "waiting for backup, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
-              if(devImageName == devBackupImageName){
-                backupComplete = true
-                break
-              } else {
-                delay = i * 2
-                sleep(delay)
-                devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
-              }
-            }
+    //         // varify backup
+    //         for (int i=0; i<maxIterations; i++){
+    //           echo "waiting for backup, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
+    //           if(devImageName == devBackupImageName){
+    //             backupComplete = true
+    //             break
+    //           } else {
+    //             delay = i * 2
+    //             sleep(delay)
+    //             devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
+    //           }
+    //         }
 
-            if(!backupComplete) {
-              echo "ERROR: backup dev image failed"
-              currentBuild.result = "FAILURE"
-              exit 1
-            }
+    //         if(!backupComplete) {
+    //           echo "ERROR: backup dev image failed"
+    //           currentBuild.result = "FAILURE"
+    //           exit 1
+    //         }
 
-            // deploy
-            echo "Deploying to dev..."
-            openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev', srcStream: 'eagle-admin', srcTag: "${IMAGE_HASH}"
-            devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
+    //         // deploy
+    //         echo "Deploying to dev..."
+    //         openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev', srcStream: 'eagle-admin', srcTag: "${IMAGE_HASH}"
+    //         devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
 
-            // varify deployment
-            for (int i=0; i<maxIterations; i++){
-              echo "waiting for deployment, iterator is: ${i}, \n max iterator is ${maxIterations} \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
-              if(devImageName != devBackupImageName){
-                deploymentComplete = true
-                break
-              } else {
-                delay = i * 2
-                sleep(delay)
-                devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
-              }
-            }
+    //         // varify deployment
+    //         for (int i=0; i<maxIterations; i++){
+    //           echo "waiting for deployment, iterator is: ${i}, \n max iterator is ${maxIterations} \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
+    //           if(devImageName != devBackupImageName){
+    //             deploymentComplete = true
+    //             break
+    //           } else {
+    //             delay = i * 2
+    //             sleep(delay)
+    //             devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
+    //           }
+    //         }
 
-            if(!deploymentComplete) {
-              echo "ERROR: deployment failed"
-              currentBuild.result = "FAILURE"
-              exit 1
-            }
+    //         if(!deploymentComplete) {
+    //           echo "ERROR: deployment failed"
+    //           currentBuild.result = "FAILURE"
+    //           exit 1
+    //         }
 
-            openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'mem-mmti-prod', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
-            echo ">>>> Deployment Complete"
+    //         openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'mem-mmti-prod', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
+    //         echo ">>>> Deployment Complete"
 
-            // notifyRocketChat(
-            //   "A new version of eagle-admin is now in Dev, build ${env.BUILD_DISPLAY_NAME} \n Changes: \n ${CHANGELOG}",
-            //   ROCKET_DEPLOY_WEBHOOK
-            // )
+    //         // notifyRocketChat(
+    //         //   "A new version of eagle-admin is now in Dev, build ${env.BUILD_DISPLAY_NAME} \n Changes: \n ${CHANGELOG}",
+    //         //   ROCKET_DEPLOY_WEBHOOK
+    //         // )
 
-            // notifyRocketChat(
-            //   "@all A new version of eagle-admin is now in Dev and ready for QA. \n Changes to Dev: \n ${CHANGELOG}",
-            //   ROCKET_QA_WEBHOOK
-            // )
-          } catch (error) {
-            // notifyRocketChat(
-            //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: ${error.message}",
-            //   ROCKET_DEPLOY_WEBHOOK
-            // )
-            currentBuild.result = "FAILURE"
-            throw new Exception("Deploy failed")
-          }
-        }
-      }
-    }
+    //         // notifyRocketChat(
+    //         //   "@all A new version of eagle-admin is now in Dev and ready for QA. \n Changes to Dev: \n ${CHANGELOG}",
+    //         //   ROCKET_QA_WEBHOOK
+    //         // )
+    //       } catch (error) {
+    //         // notifyRocketChat(
+    //         //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: ${error.message}",
+    //         //   ROCKET_DEPLOY_WEBHOOK
+    //         // )
+    //         currentBuild.result = "FAILURE"
+    //         throw new Exception("Deploy failed")
+    //       }
+    //     }
+    //   }
+    // }
 
     stage('Zap') {
       steps {
