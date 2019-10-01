@@ -419,7 +419,7 @@ def postZapToSonar () {
                 REPORT_PUBLISHED = true
                 break
               } else {
-                delay = sh returnStdout: true, script: "\$((1<<${i}))"
+                delay = i * 2
                 sleep(delay)
                 NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
                 NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)              }
@@ -453,7 +453,7 @@ def postZapToSonar () {
                   revertComplete = true
                   break
                 } else {
-                  delay = sh returnStdout: true, script: "\$((1<<${i}))"
+                  delay = i *2
                   sleep(delay)
                   devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
                 }
@@ -584,7 +584,7 @@ pipeline {
                 backupComplete = true
                 break
               } else {
-                delay = sh returnStdout: true, script: "\$((1<<${i}))"
+                delay = i * 2
                 sleep(delay)
                 devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
               }
@@ -608,7 +608,7 @@ pipeline {
                 deploymentComplete = true
                 break
               } else {
-                delay = sh returnStdout: true, script: "\$((1<<${i}))"
+                delay = i * 2
                 sleep(delay)
                 devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
               }
