@@ -215,7 +215,7 @@ def nodejsSonarqube () {
               echo "6"
 
               for (int i=0; i<MAX_ITERATIONS; i++) {
-                echo "waiting for backup, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
+                echo "waiting for sonarqube report, iterator is: ${i}, \n Old Date: ${OLD_ZAP_DATE} \n New Date: ${NEW_ZAP_DATE}"
                 if (NEW_ZAP_DATE != OLD_ZAP_DATE) {
                   REPORT_PUBLISHED = true
                   break
