@@ -69,7 +69,7 @@ def sonarGetStatus (jsonPayload) {
  */
 def sonarGetDate (jsonPayload) {
   def jsonSlurper = new JsonSlurper()
-  return jsonSlurper.parseText(jsonPayload).projectStatus.date
+  return jsonSlurper.parseText(jsonPayload).projectStatus.periods.date
 }
 
 /*
@@ -192,7 +192,7 @@ def nodejsSonarqube () {
               def SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
               echo "${SONARQUBE_URL}"
 
-              def SONARQUBE_STATUS_URL = "${SONARQUBE_URL}/api/qualitygates/project_status?projectKey=org.sonarqube:eagle-admin-zap-scan"
+              def SONARQUBE_STATUS_URL = "${SONARQUBE_URL}/api/qualitygates/project_status?projectKey=org.sonarqube:eagle-admin"
 
               // get old sonar report date
               def OLD_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
