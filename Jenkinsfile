@@ -543,14 +543,14 @@ pipeline {
         //   }
         // }
 
-        // stage('Sonarqube') {
-        //   steps {
-        //     script {
-        //       echo "Running Sonarqube"
-        //       def result = nodejsSonarqube()
-        //     }
-        //   }
-        // }
+        stage('Sonarqube') {
+          steps {
+            script {
+              echo "Running Sonarqube"
+              def result = nodejsSonarqube()
+            }
+          }
+        }
       }
     }
 
@@ -636,24 +636,24 @@ pipeline {
       }
     }
 
-    // stage('Zap') {
-    //   steps {
-    //     script {
-    //       echo "Running Zap Scan"
-    //       def result = zapScanner()
-    //     }
-    //   }
-    // }
+    stage('Zap') {
+      steps {
+        script {
+          echo "Running Zap Scan"
+          def result = zapScanner()
+        }
+      }
+    }
 
 
-    // stage('Zap to Sonarqube') {
-    //   steps {
-    //     script {
-    //       echo "Posting Zap Scan to Sonarqube Report"
-    //       def result = postZapToSonar()
-    //     }
-    //   }
-    // }
+    stage('Zap to Sonarqube') {
+      steps {
+        script {
+          echo "Posting Zap Scan to Sonarqube Report"
+          def result = postZapToSonar()
+        }
+      }
+    }
 
 
     // stage('BDD Tests') {
