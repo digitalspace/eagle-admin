@@ -467,20 +467,32 @@ pipeline {
       steps {
         script {
           try {
+            def devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
+            def delay = 0
+            def backupComplete = false;
+            def deploymentComplete = false
+            def maxIterations = 6
+
             echo "Backing up dev image..."
             openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev-backup', srcStream: 'eagle-admin', srcTag: 'dev'
 
-            def devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
-            echo "${devImageName}"
-
             def devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
-            echo "${devBackupImageName}"
 
-            while (devImageName != devBackupImageName) {
-              echo "while 1"
-              sleep(5)
-              devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
-              echo "${devBackupImageName}"
+            for (int i=0; i<maxIterations; i++){
+              echo "waiting for backup, iterator is: ${i}, \n max iterator is ${maxIterations} \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
+              if(devImageName == devBackupImageName){
+                backupComplete = true
+              } else {
+                delay = sh returnStdout: true, script: "\$((1<<${i}))"
+                sleep(delay)
+                devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
+              }
+            }
+
+            if(!backupComplete) {
+              echo "ERROR: backup failed"
+              currentBuild.result = "FAILURE"
+              exit 1
             }
 
 
@@ -491,11 +503,21 @@ pipeline {
             devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
             echo "${devImageName}"
 
-            while (devImageName == devBackupImageName) {
-              echo "while 2"
-              sleep(5)
-              devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
-              echo "${devImageName}"
+            for (int i=0; i<maxIterations; i++){
+              echo "waiting for deployment, iterator is: ${i}, \n max iterator is ${maxIterations} \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
+              if(devImageName != devBackupImageName){
+                deploymentComplete = true
+              } else {
+                delay = sh returnStdout: true, script: "\$((1<<${i}))"
+                sleep(delay)
+                devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
+              }
+            }
+
+            if(!deploymentComplete) {
+              echo "ERROR: deployment failed"
+              currentBuild.result = "FAILURE"
+              exit 1
             }
 
 
