@@ -68,8 +68,11 @@ def sonarGetStatus (jsonPayload) {
  * and returns the date string
  */
 def sonarGetDate (jsonPayload) {
+  echo "3"
   def jsonSlurper = new JsonSlurper()
+  echo "4"
   return jsonSlurper.parseText(jsonPayload).projectStatus.periods[0].date
+  echo "5"
 }
 
 /*
@@ -205,8 +208,11 @@ def nodejsSonarqube () {
               sh returnStdout: true, script: "./gradlew sonarqube -Dsonar.host.url=${SONARQUBE_URL} -Dsonar. -Dsonar.verbose=true --stacktrace --info"
 
               // check that sonar report is updated
+              echo "1"
               def NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
+              echo "2"
               def NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
+              echo "6"
 
               for (int i=0; i<MAX_ITERATIONS; i++){
                 echo "waiting for backup, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
@@ -217,7 +223,8 @@ def nodejsSonarqube () {
                   delay = sh returnStdout: true, script: "\$((1<<${i}))"
                   sleep(delay)
                   NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
-                  NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)              }
+                  NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
+                }
               }
 
               if(!REPORT_PUBLISHED) {
