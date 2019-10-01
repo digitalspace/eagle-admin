@@ -220,7 +220,7 @@ def nodejsSonarqube () {
                   REPORT_PUBLISHED = true
                   break
                 } else {
-                  delay = ${i} * 2
+                  delay = i * 2
                   sleep(delay)
                   NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
                   NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
