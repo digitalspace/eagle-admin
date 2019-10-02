@@ -57,10 +57,11 @@ boolean imageTaggingComplete ( String sourceTag, String destinationTag, String a
   int delay = 0
 
   for (int i=0; i<iterations; i++){
-    echo "waiting to ${action}, iterator is: ${i} \n max iterator is ${iterations} \n sourceImageName: ${sourceImageName} destinationImageName ${destinationImageName}"
+    echo "waiting to ${action}, iterator is: ${i}, the max iterator is: ${iterations} \n ${sourceTag}: ${sourceImageName} ${destinationTag}: ${destinationImageName}"
 
     if (action == 'deploy') {
       if(sourceImageName != destinationImageName){
+        echo "${action} complete"
         return true
       } else {
         delay = i * 2
@@ -69,6 +70,7 @@ boolean imageTaggingComplete ( String sourceTag, String destinationTag, String a
       }
     } else {
       if(sourceImageName == destinationImageName){
+        echo "${action} complete"
         return true
       } else {
         delay = i * 2
@@ -86,8 +88,9 @@ boolean sonarqubeReportComplete ( String oldDate, String sonarqubeStatusUrl, def
   int delay = 0
 
   for (int i=0; i<iterations; i++) {
-    echo "waiting for sonarqube report, iterator is: ${i} \n max iterator is ${iterations} \n Old Date: ${oldSonarqubeReportDate} \n New Date: ${newSonarqubeReportDate}"
+    echo "waiting for sonarqube report, iterator is: ${i}, max iterator is: ${iterations} \n Old Date: ${oldSonarqubeReportDate} \n New Date: ${newSonarqubeReportDate}"
     if (oldSonarqubeReportDate != newSonarqubeReportDate) {
+      echo "sonarqube report complete"
       return true
     } else {
       delay = i * 2
@@ -230,7 +233,7 @@ def nodejsSonarqube () {
               sh returnStdout: true, script: "./gradlew sonarqube -Dsonar.host.url=${SONARQUBE_URL} -Dsonar. -Dsonar.verbose=true --stacktrace --info"
 
               // wiat for report to be updated
-              if(!sonarqubeReportComplete ( OLD_ZAP_DATE, SONARQUBE_STATUS_URL)) {
+              if ( !sonarqubeReportComplete ( OLD_ZAP_DATE, SONARQUBE_STATUS_URL ) ) {
                 echo "sonarqube report failed to complete, or timed out"
 
                 // notifyRocketChat(
