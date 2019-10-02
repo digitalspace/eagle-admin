@@ -82,7 +82,7 @@ boolean imageTaggingComplete ( String sourceTag, String destinationTag, String a
 
 boolean sonarqubeReportComplete ( String oldDate, String sonarqubeStatusUrl, def iterations = 10 ) {
   def oldSonarqubeReportDate = oldDate
-  def newSonarqubeReportDate = sonarGetDate ( sh returnStdout: true, script: "curl -w '%{http_code}' '${sonarqubeStatusUrl}'" )
+  def newSonarqubeReportDate = sonarGetDate ( sh ( returnStdout: true, script: "curl -w '%{http_code}' '${sonarqubeStatusUrl}'" ) )
   int delay = 0
 
   for (int i=0; i<iterations; i++) {
@@ -92,7 +92,7 @@ boolean sonarqubeReportComplete ( String oldDate, String sonarqubeStatusUrl, def
     } else {
       delay = i * 2
       sleep(delay)
-      newSonarqubeReportDate = sonarGetDate ( sh returnStdout: true, script: "curl -w '%{http_code}' '${sonarqubeStatusUrl}'" )
+      newSonarqubeReportDate = sonarGetDate ( sh ( returnStdout: true, script: "curl -w '%{http_code}' '${sonarqubeStatusUrl}'" ) )
     }
   }
   return false
