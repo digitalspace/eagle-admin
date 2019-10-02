@@ -3,7 +3,7 @@ import groovy.json.JsonSlurper
 import java.util.regex.Pattern
 
 @NonCPS
-String getUrlForRoute(String routeName, String projectNameSpace = '') {
+String getUrlFromRoute(String routeName, String projectNameSpace = '') {
 
   def nameSpaceFlag = ''
   if(projectNameSpace?.trim()) {
@@ -16,26 +16,6 @@ String getUrlForRoute(String routeName, String projectNameSpace = '') {
   ).trim()
 
   return url
-}
-
-boolean checkDeploymentIsUp(String application, String project, def iterations = 6 ){ // 2^6 factorial = 127 seconds
-
-  def maxWaitSeconds=$(((1<<iterations+1)-1))
-  echo "Detecting pods for project ${project} deployment ${application}.  Waiting for up to ${maxWaitSeconds} seconds..."
-
-  def delay = 0
-
-  for (bit=0; bit<iterations; bit++) {
-    delay = sh "\$((1<<bit))"
-    sleep $delay
-    def pods = sh "oc get pods --selector app=${application} -n ${project} -o name 2>&1"
-    if (bla) {
-      echo "Detected pods for project ${project} deployment ${application}.  Pods: ${pods}"
-      return true
-    }
-  }
-  echo "Tried to detect running pods for project ${project} deployment ${application} and failed."
-  return false
 }
 
 /*
@@ -53,7 +33,6 @@ def notifyRocketChat(text, url) {
     // sh("curl -X POST -H 'Content-Type: application/json' --data \'${payload}\' ${rocketChatURL}")
 }
 
-
 /*
  * takes in a sonarqube status json payload
  * and returns the status string
@@ -68,11 +47,55 @@ def sonarGetStatus (jsonPayload) {
  * and returns the date string
  */
 def sonarGetDate (jsonPayload) {
-  echo "3"
   def jsonSlurper = new JsonSlurper()
-  echo "4"
   return jsonSlurper.parseText(jsonPayload).projectStatus.periods[0].date
-  echo "5"
+}
+
+boolean imageTaggingComplete ( String sourceTag, String destinationTag, String action, def iterations = 10 ) {
+  def sourceImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:${sourceTag} | head -n 1".trim()
+  def destinationImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:${destinationTag} | head -n 1".trim()
+  int delay = 0
+
+  for (int i=0; i<iterations; i++){
+    echo "waiting to ${action}, iterator is: ${i} \n max iterator is ${iterations} \n sourceImageName: ${sourceImageName} destinationImageName ${destinationImageName}"
+
+    if (action == 'deploy') {
+      if(sourceImageName != destinationImageName){
+        return true
+      } else {
+        delay = i * 2
+        sleep(delay)
+        destinationImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:${destinationTag} | head -n 1".trim()
+      }
+    } else {
+      if(sourceImageName == destinationImageName){
+        return true
+      } else {
+        delay = i * 2
+        sleep(delay)
+        destinationImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:${destinationTag} | head -n 1".trim()
+      }
+    }
+  }
+  return false
+}
+
+boolean sonarqubeReportComplete ( String oldDate, String sonarqubeStatusUrl, def iterations = 10 ) {
+  def oldSonarqubeReportDate = oldDate
+  def newSonarqubeReportDate = sonarGetDate ( sh returnStdout: true, script: "curl -w '%{http_code}' '${sonarqubeStatusUrl}'" )
+  int delay = 0
+
+  for (int i=0; i<iterations; i++) {
+    echo "waiting for sonarqube report, iterator is: ${i} \n max iterator is ${iterations} \n Old Date: ${oldSonarqubeReportDate} \n New Date: ${newSonarqubeReportDate}"
+    if (oldSonarqubeReportDate != newSonarqubeReportDate) {
+      return true
+    } else {
+      delay = i * 2
+      sleep(delay)
+      newSonarqubeReportDate = sonarGetDate ( sh returnStdout: true, script: "curl -w '%{http_code}' '${sonarqubeStatusUrl}'" )
+    }
+  }
+  return false
 }
 
 /*
@@ -191,51 +214,36 @@ def nodejsSonarqube () {
           checkout scm
           dir('sonar-runner') {
             try {
-              // run scan
-              def SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
+              // get sonarqube url
+              def SONARQUBE_URL = getUrlFromRoute('sonarqube').trim()
               echo "${SONARQUBE_URL}"
 
+              // sonarqube report link
               def SONARQUBE_STATUS_URL = "${SONARQUBE_URL}/api/qualitygates/project_status?projectKey=org.sonarqube:eagle-admin"
 
               // get old sonar report date
               def OLD_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
               def OLD_ZAP_DATE = sonarGetDate (OLD_ZAP_DATE_JSON)
 
-              int MAX_ITERATIONS = 10
-              boolean REPORT_PUBLISHED = false
-
+              // run scan
               sh "npm install typescript"
               sh returnStdout: true, script: "./gradlew sonarqube -Dsonar.host.url=${SONARQUBE_URL} -Dsonar. -Dsonar.verbose=true --stacktrace --info"
 
-              // check that sonar report is updated
-              echo "1"
-              def NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
-              echo "2"
-              def NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
-              echo "6"
+              // wiat for report to be updated
+              if(!sonarqubeReportComplete ( OLD_ZAP_DATE, SONARQUBE_STATUS_URL)) {
+                echo "sonarqube report failed to complete, or timed out"
 
-              for (int i=0; i<MAX_ITERATIONS; i++) {
-                echo "waiting for sonarqube report, iterator is: ${i}, \n Old Date: ${OLD_ZAP_DATE} \n New Date: ${NEW_ZAP_DATE}"
-                if (NEW_ZAP_DATE != OLD_ZAP_DATE) {
-                  REPORT_PUBLISHED = true
-                  break
-                } else {
-                  delay = i * 2
-                  sleep(delay)
-                  NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
-                  NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
-                }
-              }
+                // notifyRocketChat(
+                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n sonarqube report failed to complete, or timed out : ${SONARQUBE_URL}",
+                //   ROCKET_DEPLOY_WEBHOOK
+                // )
 
-              if(!REPORT_PUBLISHED) {
-                echo "ERROR: Zap report failed to send"
                 currentBuild.result = "FAILURE"
                 exit 1
               }
 
               // check if sonarqube passed
               sh("oc extract secret/sonarqube-status-urls --to=${env.WORKSPACE}/sonar-runner --confirm")
-              SONARQUBE_STATUS_URL = "${SONARQUBE_URL}/api/qualitygates/project_status?projectKey=org.sonarqube:eagle-admin"
 
               SONARQUBE_STATUS_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
               SONARQUBE_STATUS = sonarGetStatus (SONARQUBE_STATUS_JSON)
@@ -248,6 +256,7 @@ def nodejsSonarqube () {
                 //   ROCKET_DEPLOY_WEBHOOK
                 // )
 
+                echo "Sonarqube Scan Failed"
                 currentBuild.result = 'FAILURE'
                 exit 1
               } else {
@@ -259,7 +268,6 @@ def nodejsSonarqube () {
               //   "@all The latest build of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n ${error.message}",
               //   ROCKET_DEPLOY_WEBHOOK
               // )
-              echo "Failure, in catch"
               throw error
             } finally {
               echo "Sonarqube Scan Complete"
@@ -306,7 +314,7 @@ def zapScanner () {
           def ZAP_REPORT_STASH = "zap-report"
 
           // Dynamicaly determine the target URL for the ZAP scan ...
-          def TARGET_URL = getUrlForRoute('eagle-admin', 'mem-mmti-prod').trim()
+          def TARGET_URL = getUrlFromRoute('eagle-admin', 'mem-mmti-prod').trim()
           def API_TARGET_URL="${TARGET_URL}/api/"
 
           echo "Target URL: ${TARGET_URL}"
@@ -374,16 +382,15 @@ def postZapToSonar () {
           // The name of the "stash" containing the ZAP report
           def ZAP_REPORT_STASH = "zap-report"
 
-          def SONARQUBE_URL = getUrlForRoute('sonarqube').trim()
-          echo "${SONARQUBE_URL}"
+          // get sonarqube url
+          def SONARQUBE_URL = getUrlFromRoute('sonarqube').trim()
+
+          // url for the sonarqube report
           def SONARQUBE_STATUS_URL = "${SONARQUBE_URL}/api/qualitygates/project_status?projectKey=org.sonarqube:eagle-admin-zap-scan"
 
           // get old sonar report date
           def OLD_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
           def OLD_ZAP_DATE = sonarGetDate (OLD_ZAP_DATE_JSON)
-
-          int MAX_ITERATIONS = 10
-          boolean REPORT_PUBLISHED = false
 
           echo "Checking out the sonar-runner folder ..."
           checkout scm
@@ -408,25 +415,15 @@ def postZapToSonar () {
                 -Dsonar.exclusions=**/*.xml"
             )
 
-            // check that sonar report is updated
-            def NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
-            def NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
+            // wiat for report to be updated
+            if(!sonarqubeReportComplete ( OLD_ZAP_DATE, SONARQUBE_STATUS_URL)) {
+              echo "Zap report failed to complete, or timed out"
 
-            for (int i=0; i<MAX_ITERATIONS; i++) {
-              echo "waiting for sonarqube report, iterator is: ${i}, \n Old Date: ${OLD_ZAP_DATE} \n New Date: ${NEW_ZAP_DATE}"
-              if (NEW_ZAP_DATE != OLD_ZAP_DATE) {
-                REPORT_PUBLISHED = true
-                break
-              } else {
-                delay = i * 2
-                sleep(delay)
-                NEW_ZAP_DATE_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
-                NEW_ZAP_DATE = sonarGetDate (NEW_ZAP_DATE_JSON)
-              }
-            }
+              // notifyRocketChat(
+              //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n sonarqube report failed to complete, or timed out : ${SONARQUBE_URL}",
+              //   ROCKET_DEPLOY_WEBHOOK
+              // )
 
-            if(!REPORT_PUBLISHED) {
-              echo "ERROR: Zap report failed to send"
               currentBuild.result = "FAILURE"
               exit 1
             }
@@ -435,7 +432,7 @@ def postZapToSonar () {
             ZAP_STATUS_JSON = sh(returnStdout: true, script: "curl -w '%{http_code}' '${SONARQUBE_STATUS_URL}'")
             ZAP_STATUS = sonarGetStatus (ZAP_STATUS_JSON)
 
-            if ( "${ZAP_STATUS}" == "ERROR") {
+            if ( "${ZAP_STATUS}" == "ERROR" ) {
               echo "ZAP Scan Failed"
 
               def devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
@@ -446,21 +443,14 @@ def postZapToSonar () {
               openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev', srcStream: 'eagle-admin', srcTag: 'dev-backup'
               def devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
 
-              // varify backup
-              for (int i=0; i<maxIterations; i++){
-                echo "waiting for revert, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
-                if(devImageName == devBackupImageName){
-                  revertComplete = true
-                  break
-                } else {
-                  delay = i *2
-                  sleep(delay)
-                  devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
-                }
-              }
+              if(!imageTaggingComplete ('dev-backup', 'dev', 'revert')) {
+                echo "Failed to revert dev image after Zap scan failed, please revert the dev image manually from dev-backup"
 
-              if(!revertComplete) {
-                echo "ERROR: revert dev image failed, zap scan failed for current dev image, please revert amnually from the image: dev-backup"
+                // notifyRocketChat(
+                //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Zap scan failed: ${SONARQUBE_URL} \n Automatic revert of the deployment also failed, please revert the dev image manually from dev-backup",
+                //   ROCKET_DEPLOY_WEBHOOK
+                // )
+
                 currentBuild.result = "FAILURE"
                 exit 1
               }
@@ -470,6 +460,7 @@ def postZapToSonar () {
               //   ROCKET_DEPLOY_WEBHOOK
               // )
 
+              echo "Zap scan Failed"
               echo "Reverted dev deployment from backup"
               currentBuild.result = 'FAILURE'
               exit 1
@@ -492,46 +483,46 @@ pipeline {
     disableResume()
   }
   stages {
-    // stage('Parallel Build Steps') {
-    //   failFast true
-    //   parallel {
-    //     stage('Build') {
-    //       agent any
-    //       steps {
-    //         script {
-    //           pastBuilds = []
-    //           buildsSinceLastSuccess(pastBuilds, currentBuild);
-    //           CHANGELOG = getChangeLog(pastBuilds);
+    stage('Parallel Build Steps') {
+      failFast true
+      parallel {
+        stage('Build') {
+          agent any
+          steps {
+            script {
+              pastBuilds = []
+              buildsSinceLastSuccess(pastBuilds, currentBuild);
+              CHANGELOG = getChangeLog(pastBuilds);
 
-    //           echo ">>>>>>Changelog: \n ${CHANGELOG}"
+              echo ">>>>>>Changelog: \n ${CHANGELOG}"
 
-    //           try {
-    //             sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
-    //             ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
-    //             ROCKET_QA_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-qa-webhook')
+              try {
+                sh("oc extract secret/rocket-chat-secrets --to=${env.WORKSPACE} --confirm")
+                ROCKET_DEPLOY_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-deploy-webhook')
+                ROCKET_QA_WEBHOOK = sh(returnStdout: true, script: 'cat rocket-qa-webhook')
 
-    //             echo "Building eagle-admin develop branch"
-    //             openshiftBuild bldCfg: 'eagle-admin-angular', showBuildLogs: 'true'
-    //             openshiftBuild bldCfg: 'eagle-admin-build', showBuildLogs: 'true'
-    //             echo "Build done"
+                echo "Building eagle-admin develop branch"
+                openshiftBuild bldCfg: 'eagle-admin-angular', showBuildLogs: 'true'
+                openshiftBuild bldCfg: 'eagle-admin-build', showBuildLogs: 'true'
+                echo "Build done"
 
-    //             echo ">>> Get Image Hash"
-    //             // Don't tag with BUILD_ID so the pruner can do it's job; it won't delete tagged images.
-    //             // Tag the images for deployment based on the image's hash
-    //             IMAGE_HASH = sh (
-    //               script: """oc get istag eagle-admin:latest -o template --template=\"{{.image.dockerImageReference}}\"|awk -F \":\" \'{print \$3}\'""",
-    //               returnStdout: true).trim()
-    //             echo ">> IMAGE_HASH: ${IMAGE_HASH}"
-    //           } catch (error) {
-    //             // notifyRocketChat(
-    //             //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: \n ${error.message}",
-    //             //   ROCKET_QA_WEBHOOK
-    //             // )
-    //             throw error
-    //           }
-    //         }
-    //       }
-    //     }
+                echo ">>> Get Image Hash"
+                // Don't tag with BUILD_ID so the pruner can do it's job; it won't delete tagged images.
+                // Tag the images for deployment based on the image's hash
+                IMAGE_HASH = sh (
+                  script: """oc get istag eagle-admin:latest -o template --template=\"{{.image.dockerImageReference}}\"|awk -F \":\" \'{print \$3}\'""",
+                  returnStdout: true).trim()
+                echo ">> IMAGE_HASH: ${IMAGE_HASH}"
+              } catch (error) {
+                // notifyRocketChat(
+                //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: \n ${error.message}",
+                //   ROCKET_QA_WEBHOOK
+                // )
+                throw error
+              }
+            }
+          }
+        }
 
     //     //  stage('Unit Tests') {
     //     //   steps {
@@ -551,98 +542,80 @@ pipeline {
     //     //   }
     //     // }
 
-    //     stage('Sonarqube') {
-    //       steps {
-    //         script {
-    //           echo "Running Sonarqube"
-    //           def result = nodejsSonarqube()
-    //         }
-    //       }
-    //     }
-    //   }
-    // }
+        stage('Sonarqube') {
+          steps {
+            script {
+              echo "Running Sonarqube"
+              def result = nodejsSonarqube()
+            }
+          }
+        }
+      }
+    }
 
-    // stage('Deploy to dev'){
-    //   steps {
-    //     script {
-    //       try {
-    //         def devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
-    //         def delay = 0
-    //         def backupComplete = false;
-    //         def deploymentComplete = false
-    //         def maxIterations = 6
+    stage('Deploy to dev'){
+      steps {
+        script {
+          try {
+            // backup
+            echo "Backing up dev image..."
+            openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev-backup', srcStream: 'eagle-admin', srcTag: 'dev'
+            def devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
 
-    //         // backup
-    //         echo "Backing up dev image..."
-    //         openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev-backup', srcStream: 'eagle-admin', srcTag: 'dev'
-    //         def devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
+            // varify backup
+            if(!imageTaggingComplete ('dev', 'dev-backup', 'backup')) {
+              echo "Dev image backup failed"
 
-    //         // varify backup
-    //         for (int i=0; i<maxIterations; i++){
-    //           echo "waiting for backup, iterator is: ${i}, \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
-    //           if(devImageName == devBackupImageName){
-    //             backupComplete = true
-    //             break
-    //           } else {
-    //             delay = i * 2
-    //             sleep(delay)
-    //             devBackupImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev-backup | head -n 1".trim()
-    //           }
-    //         }
+              // notifyRocketChat(
+              //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Dev image backup failed",
+              //   ROCKET_DEPLOY_WEBHOOK
+              // )
 
-    //         if(!backupComplete) {
-    //           echo "ERROR: backup dev image failed"
-    //           currentBuild.result = "FAILURE"
-    //           exit 1
-    //         }
+              currentBuild.result = "FAILURE"
+              exit 1
+            }
 
-    //         // deploy
-    //         echo "Deploying to dev..."
-    //         openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev', srcStream: 'eagle-admin', srcTag: "${IMAGE_HASH}"
-    //         devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
+            // deploy
+            echo "Deploying to dev..."
+            openshiftTag destStream: 'eagle-admin', verbose: 'false', destTag: 'dev', srcStream: 'eagle-admin', srcTag: "${IMAGE_HASH}"
+            devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
 
-    //         // varify deployment
-    //         for (int i=0; i<maxIterations; i++){
-    //           echo "waiting for deployment, iterator is: ${i}, \n max iterator is ${maxIterations} \n dev ${devImageName} \n dev-backup ${devBackupImageName}"
-    //           if(devImageName != devBackupImageName){
-    //             deploymentComplete = true
-    //             break
-    //           } else {
-    //             delay = i * 2
-    //             sleep(delay)
-    //             devImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:dev | head -n 1".trim()
-    //           }
-    //         }
+            // varify deployment
+            if(!imageTaggingComplete ("${IMAGE_HASH}", 'dev-backup', 'deploy')) {
+              echo "Dev image deployment failed"
 
-    //         if(!deploymentComplete) {
-    //           echo "ERROR: deployment failed"
-    //           currentBuild.result = "FAILURE"
-    //           exit 1
-    //         }
+              // notifyRocketChat(
+              //   "@all The latest build, ${env.BUILD_DISPLAY_NAME} of eagle-admin seems to be broken. \n ${env.BUILD_URL}\n Error: \n Dev image deployment failed",
+              //   ROCKET_DEPLOY_WEBHOOK
+              // )
 
-    //         openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'mem-mmti-prod', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
-    //         echo ">>>> Deployment Complete"
+              currentBuild.result = "FAILURE"
+              exit 1
+            }
 
-    //         // notifyRocketChat(
-    //         //   "A new version of eagle-admin is now in Dev, build ${env.BUILD_DISPLAY_NAME} \n Changes: \n ${CHANGELOG}",
-    //         //   ROCKET_DEPLOY_WEBHOOK
-    //         // )
+            openshiftVerifyDeployment depCfg: 'eagle-admin', namespace: 'mem-mmti-prod', replicaCount: 1, verbose: 'false', verifyReplicaCount: 'false', waitTime: 600000
+            echo ">>>> Deployment Complete"
 
-    //         // notifyRocketChat(
-    //         //   "@all A new version of eagle-admin is now in Dev and ready for QA. \n Changes to Dev: \n ${CHANGELOG}",
-    //         //   ROCKET_QA_WEBHOOK
-    //         // )
-    //       } catch (error) {
-    //         // notifyRocketChat(
-    //         //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: ${error.message}",
-    //         //   ROCKET_DEPLOY_WEBHOOK
-    //         // )
-    //         currentBuild.result = "FAILURE"
-    //         throw new Exception("Deploy failed")
-    //       }
-    //     }
-    //   }
-    // }
+            // notifyRocketChat(
+            //   "A new version of eagle-admin is now in Dev, build ${env.BUILD_DISPLAY_NAME} \n Changes: \n ${CHANGELOG}",
+            //   ROCKET_DEPLOY_WEBHOOK
+            // )
+
+            // notifyRocketChat(
+            //   "@all A new version of eagle-admin is now in Dev and ready for QA. \n Changes to Dev: \n ${CHANGELOG}",
+            //   ROCKET_QA_WEBHOOK
+            // )
+          } catch (error) {
+            // notifyRocketChat(
+            //   "@all The build ${env.BUILD_DISPLAY_NAME} of eagle-admin, seems to be broken.\n ${env.BUILD_URL}\n Error: ${error.message}",
+            //   ROCKET_DEPLOY_WEBHOOK
+            // )
+            currentBuild.result = "FAILURE"
+            throw new Exception("Deploy failed")
+          }
+        }
+      }
+    }
 
     stage('Zap') {
       steps {
