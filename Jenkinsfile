@@ -60,20 +60,22 @@ boolean imageTaggingComplete ( String sourceTag, String destinationTag, String a
     echo "waiting to ${action}, iterator is: ${i}, the max iterator is: ${iterations} \n ${sourceTag}: ${sourceImageName} ${destinationTag}: ${destinationImageName}"
 
     if (action == 'deploy') {
-      if(sourceImageName != destinationImageName){
+      if(sourceImageName != destinationImageName && i>3){
         echo "${action} complete"
         return true
       } else {
-        delay = sh "$((1<<${i}))"
+        delay = (1<<i)
+        echo "waiting for ${delay}"
         sleep(delay)
         destinationImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:${destinationTag} | head -n 1".trim()
       }
     } else {
-      if(sourceImageName == destinationImageName){
+      if(sourceImageName == destinationImageName i>3){
         echo "${action} complete"
         return true
       } else {
         delay = sh "$((1<<${i}))"
+        echo "waiting for ${delay}"
         sleep(delay)
         destinationImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:${destinationTag} | head -n 1".trim()
       }
