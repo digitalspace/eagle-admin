@@ -70,11 +70,11 @@ boolean imageTaggingComplete ( String sourceTag, String destinationTag, String a
         destinationImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:${destinationTag} | head -n 1".trim()
       }
     } else {
-      if(sourceImageName == destinationImageName i>3){
+      if(sourceImageName == destinationImageName && i>3){
         echo "${action} complete"
         return true
       } else {
-        delay = sh "$((1<<${i}))"
+        delay = (1<<i)
         echo "waiting for ${delay}"
         sleep(delay)
         destinationImageName = sh returnStdout: true, script: "oc describe istag/eagle-admin:${destinationTag} | head -n 1".trim()
@@ -95,7 +95,8 @@ boolean sonarqubeReportComplete ( String oldDate, String sonarqubeStatusUrl, def
       echo "sonarqube report complete"
       return true
     } else {
-      delay = sh "$((1<<${i}))"
+      delay = (1<<i)
+      echo "waiting for ${delay}"
       sleep(delay)
       newSonarqubeReportDate = sonarGetDate ( sh ( returnStdout: true, script: "curl -w '%{http_code}' '${sonarqubeStatusUrl}'" ) )
     }
