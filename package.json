@@ -7,6 +7,7 @@
     "prestart": "",
     "start": "ng serve -o --base-href /admin/ --deploy-url /admin/",
     "build": "node --max_old_space_size=4096 node_modules/@angular/cli/bin/ng build --prod --deploy-url /admin/ --base-href /admin/",
+    "build:ci": "ng build --prod --configuration=production --sourceMap=false",
     "pretest": "",
     "test": "echo 'Test suite should be run with \"`npm run tests` or npm `run tests-ci`\"'",
     "tests": "ng test --watch=false",
