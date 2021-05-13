@@ -51,8 +51,8 @@ Resources:
             KEYCLOAK_URL: process.env['KEYCLOAK_URL'],
             KEYCLOAK_REALM: process.env['KEYCLOAK_REALM'],
             KEYCLOAK_ENABLED: process.env['KEYCLOAK_ENABLED']
-          }),
-        };
+            }),
+          };
         return response;
   IndexLambdaRole:
     Type: AWS::IAM::Role
