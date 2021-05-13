@@ -18,26 +18,26 @@ jobs:
           node-version: 10
       - name: Adjust env.js 1
         run: sed 's/http:\/\/localhost:3000/https:\/\/eagle-prod.apps.silver.devops.gov.bc.ca/g' src/env.js.template | sed 's/local/AWS/g' > src/env.js
-      - name: Install dependencies
-        run: npm ci
-      - name: Build
-        run: npm run build:ci
-      - name: Archive build
-        if: success()
-        uses: actions/upload-artifact@v1
-        with:
-          name: deploy_dist
-          path: dist
-      - name: Deploy to S3 
-        uses: jakejarvis/s3-sync-action@master
-        with:
-          args: --acl public-read --follow-symlinks --delete
-        env:
-          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          SOURCE_DIR: 'dist'
+      # - name: Install dependencies
+      #   run: npm ci
+      # - name: Build
+      #   run: npm run build:ci
+      # - name: Archive build
+      #   if: success()
+      #   uses: actions/upload-artifact@v1
+      #   with:
+      #     name: deploy_dist
+      #     path: dist
+      # - name: Deploy to S3 
+      #   uses: jakejarvis/s3-sync-action@master
+      #   with:
+      #     args: --acl public-read --follow-symlinks --delete
+      #   env:
+      #     AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #     AWS_REGION: ${{ secrets.AWS_REGION }}
+      #     SOURCE_DIR: 'dist'
       - name: "SAM setup"
         uses: r0zar/sam-deploy-action@v1.4
         env:
