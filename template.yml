@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  Nonce:
+    Type: String
+
+Outputs:
+  Host:
+    Value: !GetAtt Distribution.DomainName
+
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Origins:
+        - Id: !Ref Bucket
+          DomainName: !GetAtt Bucket.DomainName
+          S3OriginConfig: {}
+        DefaultCacheBehavior:
+          TargetOriginId: !Ref Bucket
+          ForwardedValues:
+            QueryString: true
+          ViewerProtocolPolicy: redirect-to-https
+          LambdaFunctionAssociations:
+          - EventType: viewer-request
+            LambdaFunctionARN: !GetAtt IndexLambdaVersion.FunctionArn
+
+  IndexLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Role: !GetAtt IndexLambdaRole.Arn
+      Runtime: nodejs12.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          const response = {
+          statusCode: 200,
+          body: JSON.stringify({
+            debugMode: process.env['debugMode'],
+            ENVIRONMENT: process.env['ENVIRONMENT'],
+            BANNER_COLOUR: process.env['BANNER_COLOUR'],
+            API_LOCATION: process.env['API_LOCATION'],
+            API_PATH: process.env['API_PATH'],
+            API_PUBLIC_PATH: process.env['API_PUBLIC_PATH'],
+            KEYCLOAK_CLIENT_ID: process.env['KEYCLOAK_CLIENT_ID'],
+            KEYCLOAK_URL: process.env['KEYCLOAK_URL'],
+            KEYCLOAK_REALM: process.env['KEYCLOAK_REALM'],
+            KEYCLOAK_ENABLED: process.env['KEYCLOAK_ENABLED']
+          }),
+        };
+        return response;
+  IndexLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+            - edgelambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  IndexLambdaVersion:
+    Type: Custom::LatestLambdaVersion
+    Properties:
+      ServiceToken: !GetAtt PublishLambdaVersion.Arn
+      FunctionName: !Ref IndexLambda
+      Nonce: !Ref Nonce
+
+  # Custom resource for getting latest version of a lambda,
+  # as required by CloudFront.
+
+  PublishLambdaVersion:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs12.x
+      Role: !GetAtt PublishLambdaVersionRole.Arn
+      Code:
+        ZipFile: |
+          const {Lambda} = require('aws-sdk')
+          const {send, SUCCESS, FAILED} = require('cfn-response')
+          const lambda = new Lambda()
+          exports.handler = (event, context) => {
+            const {RequestType, ResourceProperties: {FunctionName}} = event
+            if (RequestType == 'Delete') return send(event, context, SUCCESS)
+            lambda.publishVersion({FunctionName}, (err, {FunctionArn}) => {
+              err
+                ? send(event, context, FAILED, err)
+                : send(event, context, SUCCESS, {FunctionArn})
+            })
+          }
+  PublishLambdaVersionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: PublishVersion
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: lambda:PublishVersion
+            Resource: '*'
