@@ -1,9 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
-Parameters:
-  Nonce:
-    Type: String
-
 Outputs:
   Host:
     Value: !GetAtt Distribution.DomainName
@@ -74,7 +70,6 @@ Resources:
     Properties:
       ServiceToken: !GetAtt PublishLambdaVersion.Arn
       FunctionName: !Ref IndexLambda
-      Nonce: !Ref Nonce
 
   # Custom resource for getting latest version of a lambda,
   # as required by CloudFront.
