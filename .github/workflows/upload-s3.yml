@@ -17,7 +17,7 @@ jobs:
         with:
           node-version: 10
       - name: Adjust env.js 1
-        run: sed 's/http:\/\/localhost:3000/https:\/\/projects.eao.gov.bc.ca/g' src/env.js.template | sed 's/local/AWS/g' > env.js
+        run: sed 's/http:\/\/localhost:3000/https:\/\/eagle-prod.apps.silver.devops.gov.bc.ca/g' src/env.js.template | sed 's/local/AWS/g' > src/env.js
       - name: Install dependencies
         run: npm ci
       - name: Build
