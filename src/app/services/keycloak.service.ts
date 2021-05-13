@@ -179,13 +179,11 @@ export class KeycloakService {
   }
 
   getLogoutURL(): string {
-    // https://logon.gov.bc.ca/clp-cgi/logoff.cgi?returl=http://localhost:4200/admin/
-    // https://logontest.gov.bc.ca/clp-cgi/logoff.cgi?returl=http://localhost:4200/admin/
     if (this.keycloakEnabled) {
-      return this.keycloakAuth.authServerUrl + '/realms/' + this.keycloakRealm + '/protocol/openid-connect/logout?redirect_uri=' + window.location.origin + '/admin/not-authorized?loggedout=true';
+      return this.keycloakAuth.authServerUrl + '/realms/' + this.keycloakRealm + '/protocol/openid-connect/logout?redirect_uri=' + window.location.origin + '/not-authorized?loggedout=true';
     } else {
       // go to the /login page
-      return window.location.origin + '/admin/login';
+      return window.location.origin + '/login';
     }
   }
 }

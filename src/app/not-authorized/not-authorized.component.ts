@@ -24,7 +24,7 @@ export class NotAuthorizedComponent implements OnInit, OnDestroy {
   }
 
   login() {
-    window.location.href = window.location.origin + '/admin/search';
+    window.location.href = window.location.origin + '/search';
   }
 
   ngOnDestroy() {

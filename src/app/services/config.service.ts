@@ -31,6 +31,7 @@ export class ConfigService {
     } catch (e) {
       // Not configured
       console.log('Error getting configuration:', e);
+      console.log(window['__env'])
       this.configuration = window['__env'];
       if (this.configuration['debugMode']) {
         console.log('Configuration:', this.configuration);
