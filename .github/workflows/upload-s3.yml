@@ -38,3 +38,13 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           SOURCE_DIR: 'dist'
+      - name: Build lambda environment
+        run: cd lambda && npm install && zip -qq -r -j ../bundle.zip .
+      - name: Deploy zip to aws lambda
+        uses: appleboy/lambda-action@master
+        with:
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_region: ${{ secrets.AWS_REGION }}
+          function_name: lambdaEdge
+          zip_file: bundle.zip
