@@ -35,24 +35,40 @@ Resources:
       Handler: index.handler
       Code:
         ZipFile: |
-          exports.handler = async function (event, context) {
-            console.log("EVENT: \n" + JSON.stringify(event, null, 2));
-            const response = {
-              statusCode: 200,
-              body: JSON.stringify({
-                debugMode: process.env['debugMode'],
-                ENVIRONMENT: process.env['ENVIRONMENT'],
-                BANNER_COLOUR: process.env['BANNER_COLOUR'],
-                API_LOCATION: process.env['API_LOCATION'],
-                API_PATH: process.env['API_PATH'],
-                API_PUBLIC_PATH: process.env['API_PUBLIC_PATH'],
-                KEYCLOAK_CLIENT_ID: process.env['KEYCLOAK_CLIENT_ID'],
-                KEYCLOAK_URL: process.env['KEYCLOAK_URL'],
-                KEYCLOAK_REALM: process.env['KEYCLOAK_REALM'],
-                KEYCLOAK_ENABLED: process.env['KEYCLOAK_ENABLED']
-                })
-            };
-            return response;
+          'use strict';
+          const content = `
+          <\!DOCTYPE html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <title>Simple Lambda@Edge Static Content Response</title>
+            </head>
+            <body>
+              <p>Hello from Lambda@Edge!</p>
+            </body>
+          </html>
+          `;
+
+          exports.handler = (event, context, callback) => {
+              /*
+              * Generate HTTP OK response using 200 status code with HTML body.
+              */
+              const response = {
+                  status: '200',
+                  statusDescription: 'OK',
+                  headers: {
+                      'cache-control': [{
+                          key: 'Cache-Control',
+                          value: 'max-age=100'
+                      }],
+                      'content-type': [{
+                          key: 'Content-Type',
+                          value: 'text/html'
+                      }]
+                  },
+                  body: content,
+              };
+              callback(null, response);
           };
   IndexLambdaRole:
     Type: AWS::IAM::Role
