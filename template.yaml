@@ -17,6 +17,7 @@ Resources:
         - Id: !Ref Bucket
           DomainName: !GetAtt Bucket.DomainName
           S3OriginConfig: {}
+          OriginPath: '/api/config'
         DefaultCacheBehavior:
           TargetOriginId: !Ref Bucket
           ForwardedValues:

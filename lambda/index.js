@@ -2,6 +2,7 @@ exports.handler = async () => {
   const response = {
     statusCode: 200,
     body: JSON.stringify({
+      test: true,
       debugMode: process.env['debugMode'],
       ENVIRONMENT: process.env['ENVIRONMENT'],
       BANNER_COLOUR: process.env['BANNER_COLOUR'],
