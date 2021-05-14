@@ -32,7 +32,7 @@ Resources:
     Properties:
       Role: !GetAtt IndexLambdaRole.Arn
       Runtime: nodejs12.x
-      Handler: handler
+      Handler: index.handler
       Code:
         ZipFile: |
           exports.handler = function () => {
