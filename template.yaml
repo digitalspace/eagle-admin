@@ -63,7 +63,7 @@ Resources:
                       }],
                       'content-type': [{
                           key: 'Content-Type',
-                          value: 'application/json'
+                          value: 'text/html'
                       }]
                   },
                   body: content,
