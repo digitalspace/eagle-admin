@@ -32,7 +32,7 @@ Resources:
     Properties:
       Role: !GetAtt IndexLambdaRole.Arn
       Runtime: nodejs12.x
-      Handler: index.handler
+      Handler: handler
       Code:
         ZipFile: |
           const response = {
