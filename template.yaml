@@ -44,14 +44,14 @@ Resources:
               <title>Simple Lambda@Edge Static Content Response</title>
             </head>
             <body>
-              <p>Hello from Lambda@Edge!</p>
+              <p>Hello, from Lambda@Edge!</p>
             </body>
           </html>
           `;
 
           exports.handler = (event, context, callback) => {
               /*
-              * Generate HTTP OK response using 200 status code with JSON body.
+              * Generate HTTP OK response using 200 status code with HTML body.
               */
               const response = {
                   status: '200',
